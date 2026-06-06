@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#060c16">
+<title>Marine Gas Console · Detection & Calibration</title>
+<style>
+:root{
+  --bg:#060c16; --bg2:#0a1120; --surf:#0d1825; --surf2:#122030;
+  --bord:#1a3552; --bord2:#1e4a70;
+  --cyan:#00d4ff; --cyan-d:rgba(0,212,255,0.08); --cyan-m:rgba(0,212,255,0.18);
+  --green:#10b981; --gd:rgba(16,185,129,0.08);
+  --amber:#f59e0b; --ad:rgba(245,158,11,0.08);
+  --orange:#f97316; --od:rgba(249,115,22,0.08);
+  --red:#ef4444; --rd:rgba(239,68,68,0.08);
+  --purple:#8b5cf6;
+  --txt:#dde6f0; --muted:#7a9bc0; --dim:#3e5a78;
+  --mono:'SF Mono','JetBrains Mono','Cascadia Code',ui-monospace,Consolas,'Courier New',monospace;
+  --sans:system-ui,'Segoe UI',Roboto,-apple-system,sans-serif;
+  --sb-w:218px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--txt);font-family:var(--sans);
+  font-size:13.5px;line-height:1.55;min-height:100vh;overflow-x:hidden;
+}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(0,212,255,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.022) 1px,transparent 1px),
+    radial-gradient(ellipse 900px 520px at 22% -140px,rgba(0,120,200,.16) 0%,transparent 70%);
+  background-size:44px 44px,44px 44px,100% 100%;
+  mask-image:radial-gradient(ellipse 130% 120% at 50% 0%,#000 30%,transparent 100%);
+}
+.app,.modal-bg,#splash{position:relative;z-index:1}
+::selection{background:var(--cyan-m)}
+
+/* ───── SPLASH / OPENING 3D ───── */
+#splash{
+  position:fixed;inset:0;z-index:1000;background:#04080f;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity .7s ease, visibility .7s;
+}
+#splash.gone{opacity:0;visibility:hidden;pointer-events:none}
+#splashCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.sp-grid{position:absolute;inset:0;opacity:.5;
+  background-image:linear-gradient(rgba(0,212,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.05) 1px,transparent 1px);
+  background-size:46px 46px;mask-image:radial-gradient(ellipse 70% 70% at 50% 45%,#000 0%,transparent 80%);
+}
+.sp-inner{position:relative;z-index:2;text-align:center;padding:24px;
+  opacity:0;transform:translateY(14px);animation:spIn 1s .5s ease forwards}
+@keyframes spIn{to{opacity:1;transform:none}}
+.sp-logo{font-size:46px;filter:drop-shadow(0 0 18px rgba(0,212,255,.6));margin-bottom:10px}
+.sp-title{font-size:1.55rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--cyan);text-shadow:0 0 26px rgba(0,212,255,.5)}
+.sp-sub{font-size:.72rem;letter-spacing:.34em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+.sp-line{width:0;height:1px;margin:18px auto;background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  animation:spLine 1.1s 1s ease forwards}
+@keyframes spLine{to{width:230px}}
+.sp-enter{margin-top:6px;background:rgba(0,212,255,.08);border:1px solid var(--cyan-m);
+  color:var(--cyan);padding:11px 30px;border-radius:30px;cursor:pointer;
+  font-family:var(--sans);font-size:.74rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+  transition:all .2s;opacity:0;animation:spIn .7s 1.5s ease forwards}
+.sp-enter:hover{background:var(--cyan);color:#04080f;box-shadow:0 0 28px rgba(0,212,255,.5)}
+.sp-skip{position:absolute;top:18px;right:20px;z-index:3;color:var(--dim);background:none;border:none;
+  cursor:pointer;font-family:var(--sans);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase}
+.sp-skip:hover{color:var(--cyan)}
+
+/* ───── APP SHELL ───── */
+.app{display:flex;min-height:100vh}
+
+/* Sidebar */
+.sidebar{
+  width:var(--sb-w);flex-shrink:0;background:linear-gradient(180deg,#070d1a,#060c16);
+  border-right:1px solid var(--bord);position:sticky;top:0;height:100vh;
+  display:flex;flex-direction:column;z-index:90;transition:transform .25s ease;
+}
+.sb-brand{padding:16px 16px 14px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:10px}
+.sb-logo{font-size:24px;filter:drop-shadow(0 0 8px rgba(0,212,255,.55))}
+.sb-brand h1{font-size:.74rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);line-height:1.2}
+.sb-brand p{font-size:.58rem;color:var(--dim);letter-spacing:.05em;margin-top:2px}
+.sb-nav{flex:1;padding:10px 8px;overflow-y:auto}
+.sb-item{
+  display:flex;align-items:center;gap:11px;width:100%;padding:11px 12px;margin-bottom:3px;
+  background:none;border:none;border-radius:8px;cursor:pointer;color:var(--muted);
+  font-family:var(--sans);font-size:.82rem;font-weight:500;text-align:left;
+  border-left:2px solid transparent;transition:all .15s;
+}
+.sb-item:hover{background:rgba(255,255,255,.03);color:var(--txt)}
+.sb-item.on{background:var(--cyan-d);color:var(--cyan);border-left-color:var(--cyan);box-shadow:inset 0 0 18px rgba(0,212,255,.06)}
+.sb-item.on .ic{filter:drop-shadow(0 0 5px rgba(0,212,255,.6))}
+.sb-item .ic{font-size:17px;width:20px;text-align:center;flex-shrink:0}
+.sb-foot{padding:12px 14px;border-top:1px solid var(--bord);font-size:.58rem;color:var(--dim);line-height:1.5}
+.sb-pill{display:inline-flex;align-items:center;gap:5px;color:var(--green);font-weight:700;letter-spacing:.08em;margin-bottom:4px}
+.sb-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* Main */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{
+  position:sticky;top:0;z-index:80;display:flex;align-items:center;gap:12px;
+  padding:11px 18px;background:rgba(7,13,26,.82);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--bord);
+}
+.hamb{display:none;background:none;border:1px solid var(--bord);border-radius:7px;
+  color:var(--cyan);width:36px;height:34px;cursor:pointer;font-size:16px;flex-shrink:0}
+.tb-title{font-size:.84rem;font-weight:700;letter-spacing:.04em;color:var(--txt)}
+.tb-title span{color:var(--dim);font-weight:400;font-size:.74rem}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tb-pill{background:rgba(0,212,255,.07);border:1px solid var(--cyan-m);color:var(--cyan);
+  padding:4px 12px;border-radius:20px;font-size:.6rem;font-weight:700;letter-spacing:.1em;white-space:nowrap}
+.page{max-width:1120px;width:100%;margin:0 auto;padding:18px 18px 40px}
+.tp{display:none;animation:fadeUp .35s ease}
+.tp.on{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* Section title */
+.stitle{font-size:.84rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--cyan);text-shadow:0 0 16px rgba(0,212,255,.35);
+  margin-bottom:16px;display:flex;align-items:center;gap:9px}
+.stitle::before{content:'';width:3px;height:1.05em;background:var(--cyan);border-radius:2px;box-shadow:0 0 7px var(--cyan)}
+.sub{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+  margin:18px 0 8px;padding-left:9px;border-left:2px solid var(--bord2)}
+
+/* Card */
+.card{background:rgba(13,24,37,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--bord);border-radius:12px;padding:15px;margin-bottom:13px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 6px 22px rgba(0,0,0,.28)}
+.ch{display:flex;align-items:center;gap:9px;margin-bottom:11px;padding-bottom:9px;border-bottom:1px solid var(--bord)}
+.ct{font-size:.86rem;font-weight:700}
+
+/* Info badge (tap for definition) */
+.info-badge,.ib-i{display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;border-radius:50%;border:1px solid var(--cyan-m);
+  color:var(--cyan);font-size:9px;font-weight:700;cursor:pointer;margin-left:4px;
+  font-family:var(--sans);vertical-align:middle;line-height:1;flex-shrink:0;transition:all .15s;
+  background:rgba(0,212,255,.06)}
+.info-badge:hover{background:var(--cyan);color:#04080f}
+.info-badge:active{transform:scale(.9)}
+th .info-badge{margin-left:3px}
+
+/* Tags */
+.tag{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;
+  font-size:.65rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.tg{background:var(--gd);color:var(--green);border:1px solid rgba(16,185,129,.3)}
+.ty{background:var(--ad);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.to{background:var(--od);color:var(--orange);border:1px solid rgba(249,115,22,.3)}
+.tr{background:var(--rd);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.tc{background:var(--cyan-d);color:var(--cyan);border:1px solid rgba(0,212,255,.3)}
+
+/* Inputs */
+select,input[type=number],input[type=text]{
+  width:100%;background:var(--bg);border:1px solid var(--bord);color:var(--txt);
+  padding:10px 12px;border-radius:7px;font-size:.86rem;font-family:var(--sans);outline:none;
+  transition:border-color .18s,box-shadow .18s;appearance:none;-webkit-appearance:none}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%237a9bc0' d='M5 7L0 2h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center;padding-right:30px;cursor:pointer}
+select:focus,input:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,212,255,.13)}
+.lbl{font-size:.7rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:flex;align-items:center}
+
+/* Sensor */
+.snote{background:linear-gradient(90deg,rgba(0,212,255,.06),rgba(0,212,255,.02));
+  border-left:3px solid var(--cyan);border-radius:0 7px 7px 0;padding:11px 14px;margin:10px 0 14px;font-size:.8rem}
+.snote strong{color:var(--cyan);display:block;margin-bottom:4px;font-size:.82rem}
+.cc{border-radius:9px;padding:13px;margin-bottom:9px;position:relative}
+.cc.best{background:rgba(16,185,129,.05);border:1px solid rgba(16,185,129,.22)}
+.cc.ok{background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.22)}
+.cc.warn{background:rgba(249,115,22,.05);border:1px solid rgba(249,115,22,.22)}
+.cc.bad{background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.18)}
+.cc-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.cc-name{font-size:.9rem;font-weight:600}
+.cc-row{font-size:.78rem;color:var(--muted);margin-top:4px;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+.cc-row strong{color:var(--txt)}
+.cc-equiv{color:var(--amber);font-weight:600;font-family:var(--mono)}
+.cc-note{margin-top:8px;font-size:.76rem;color:var(--muted);background:rgba(0,0,0,.25);
+  padding:8px 10px;border-radius:5px;border-left:2px solid var(--dim);line-height:1.55}
+.cc.best .cc-note{border-left-color:var(--green)} .cc.ok .cc-note{border-left-color:var(--amber)}
+.cc.warn .cc-note{border-left-color:var(--orange)} .cc.bad .cc-note{border-left-color:var(--red)}
+.warn-badge{font-size:.68rem;color:var(--orange);font-weight:700;background:rgba(249,115,22,.1);
+  padding:3px 9px;border-radius:5px;margin-top:6px;display:inline-block}
+
+/* Tables */
+.tw{overflow-x:auto;border-radius:10px;border:1px solid var(--bord);-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+th{background:var(--surf2);color:var(--muted);font-weight:700;font-size:.66rem;text-transform:uppercase;
+  letter-spacing:.06em;padding:9px 11px;text-align:left;border-bottom:1px solid var(--bord);
+  white-space:nowrap;position:sticky;top:0}
+td{padding:9px 11px;border-bottom:1px solid rgba(26,53,82,.5);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(0,212,255,.025)}
+.mono{font-family:var(--mono);color:var(--cyan)}
+.vn{font-family:var(--mono)} .vd{color:var(--red);font-weight:600} .vw{color:var(--orange)}
+.vy{color:var(--amber)} .vs{color:var(--green)} .vm{color:var(--dim)}
+.cb{font-size:.62rem;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.hc{background:rgba(99,102,241,.15);color:#818cf8} .arom{background:rgba(249,115,22,.15);color:var(--orange)}
+.tox{background:rgba(239,68,68,.15);color:var(--red)} .spec{background:rgba(0,212,255,.12);color:var(--cyan)}
+.asph{background:rgba(100,116,139,.15);color:#94a3b8} .chem{background:rgba(245,158,11,.15);color:var(--amber)}
+.unsat{background:rgba(16,185,129,.12);color:var(--green)}
+
+/* Info boxes */
+.ib{border-radius:8px;padding:11px 14px;margin-bottom:12px;display:flex;gap:10px;font-size:.78rem;line-height:1.55}
+.ib.info{background:var(--cyan-d);border:1px solid rgba(0,212,255,.18)}
+.ib.warn{background:var(--ad);border:1px solid rgba(245,158,11,.2)}
+.ib.danger{background:var(--rd);border:1px solid rgba(239,68,68,.2)}
+.ib.tip{background:var(--gd);border:1px solid rgba(16,185,129,.18)}
+.ib-ico{font-size:15px;flex-shrink:0;margin-top:1px}
+.ib-body{flex:1}.ib-body strong{display:block;margin-bottom:2px;font-size:.8rem}
+
+/* Converter */
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+@media(max-width:600px){.cgrid{grid-template-columns:1fr}}
+.cig{margin-bottom:11px}
+.cres{background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.18);border-radius:9px;padding:13px;margin-top:13px}
+.crgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px}
+.citem{background:rgba(0,0,0,.25);border-radius:7px;padding:10px 11px}
+.ci-lbl{font-size:.62rem;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.ci-val{font-size:1.08rem;font-weight:700;color:var(--cyan);font-family:var(--mono);text-shadow:0 0 12px rgba(0,212,255,.3)}
+.ci-unit{font-size:.66rem;color:var(--muted)}
+
+/* Filters / search */
+.sfbar{display:flex;gap:8px;margin-bottom:10px}.sfbar input{flex:1}
+.fgrp{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.fb{padding:4px 12px;border-radius:20px;border:1px solid var(--bord);background:none;color:var(--dim);
+  cursor:pointer;font-size:.7rem;font-family:var(--sans);transition:all .15s}
+.fb.on,.fb:hover{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-d)}
+
+/* Sub nav */
+.snav{display:flex;gap:0;margin-bottom:15px;border-bottom:1px solid var(--bord);overflow-x:auto;scrollbar-width:none}
+.snav::-webkit-scrollbar{display:none}
+.snb{padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);
+  cursor:pointer;font-size:.76rem;white-space:nowrap;font-family:var(--sans);transition:all .15s}
+.snb.on{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+/* Checklist */
+.cli{display:flex;gap:10px;padding:10px 12px;border-radius:7px;margin-bottom:5px;background:var(--surf);
+  border:1px solid var(--bord);cursor:pointer;transition:all .15s}
+.cli:hover{border-color:var(--cyan);background:var(--cyan-d)}
+.cli.done{opacity:.5}.cli.done .clb{background:var(--green);border-color:var(--green);color:#fff}
+.clb{width:18px;height:18px;border:1.5px solid var(--bord2);border-radius:5px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:10px;margin-top:1px;transition:all .15s}
+.clt{font-size:.8rem;flex:1;line-height:1.55}.clt strong{color:var(--cyan)}
+.clprog{height:4px;border-radius:3px;background:var(--bord);overflow:hidden;margin-bottom:10px}
+.clprog>i{display:block;height:100%;background:var(--green);width:0;transition:width .25s}
+
+/* Alarm levels */
+.alevel{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;margin-bottom:3px;font-size:.78rem;flex-wrap:wrap}
+.alevel .alv{font-family:var(--mono);font-weight:700;min-width:84px;font-size:.82rem}
+.alevel .als{font-weight:700;min-width:130px;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+.alevel .ald{color:var(--muted);flex:1;min-width:180px}
+
+.divider{border:none;border-top:1px solid var(--bord);margin:15px 0}
+.btn-reset{background:none;border:1px solid var(--bord);color:var(--muted);padding:5px 13px;border-radius:6px;
+  cursor:pointer;font-size:.72rem;font-family:var(--sans);transition:all .15s}
+.btn-reset:hover{border-color:var(--cyan);color:var(--cyan)}
+.glow-r{text-shadow:0 0 8px rgba(239,68,68,.5)}
+
+/* Glossary */
+.gl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.gl-card{background:var(--surf);border:1px solid var(--bord);border-radius:9px;padding:12px 13px;transition:border-color .15s}
+.gl-card:hover{border-color:var(--cyan-m)}
+.gl-abbr{font-family:var(--mono);font-size:.92rem;font-weight:700;color:var(--cyan)}
+.gl-full{font-size:.8rem;font-weight:600;color:var(--txt);margin:2px 0 5px}
+.gl-desc{font-size:.74rem;color:var(--muted);line-height:1.55}
+.gl-cat{font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:8px;font-weight:700}
+
+/* Info modal / bottom sheet */
+.modal-bg{position:fixed;inset:0;z-index:300;background:rgba(2,5,10,.7);backdrop-filter:blur(3px);
+  opacity:0;visibility:hidden;transition:all .22s;display:flex;align-items:flex-end;justify-content:center}
+.modal-bg.show{opacity:1;visibility:visible}
+.modal{background:var(--surf);border:1px solid var(--bord2);border-bottom:none;
+  border-radius:14px 14px 0 0;padding:18px 20px 26px;width:100%;max-width:520px;
+  transform:translateY(100%);transition:transform .26s cubic-bezier(.2,.8,.2,1);box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+.modal-bg.show .modal{transform:none}
+@media(min-width:560px){.modal-bg{align-items:center}.modal{border-radius:14px;border-bottom:1px solid var(--bord2)}}
+.modal-grip{width:42px;height:4px;border-radius:3px;background:var(--bord2);margin:0 auto 14px}
+.modal-abbr{font-family:var(--mono);font-size:1.3rem;font-weight:800;color:var(--cyan);text-shadow:0 0 14px rgba(0,212,255,.4)}
+.modal-full{font-size:.92rem;font-weight:700;color:var(--txt);margin:3px 0 10px}
+.modal-desc{font-size:.84rem;color:var(--muted);line-height:1.65}
+.modal-meta{margin-top:12px;padding-top:11px;border-top:1px solid var(--bord);font-size:.72rem;color:var(--dim)}
+.modal-close{margin-top:16px;width:100%;background:var(--cyan-d);border:1px solid var(--cyan-m);color:var(--cyan);
+  padding:11px;border-radius:9px;cursor:pointer;font-family:var(--sans);font-weight:700;font-size:.8rem;letter-spacing:.04em}
+.modal-close:hover{background:var(--cyan);color:#04080f}
+
+/* Drawer backdrop (mobile) */
+.scrim{position:fixed;inset:0;background:rgba(2,5,10,.6);z-index:85;opacity:0;visibility:hidden;transition:opacity .25s}
+.scrim.show{opacity:1;visibility:visible}
+
+@media(max-width:900px){
+  .sidebar{position:fixed;top:0;left:0;transform:translateX(-100%)}
+  .sidebar.open{transform:none;box-shadow:8px 0 40px rgba(0,0,0,.5)}
+  .hamb{display:flex;align-items:center;justify-content:center}
+}
+@media(max-width:520px){.page{padding:14px 12px 36px}.tb-title span{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+
+<!-- ════════ SPLASH / OPENING 3D ════════ -->
+<div id="splash">
+  <canvas id="splashCanvas"></canvas>
+  <div class="sp-grid"></div>
+  <div class="sp-inner">
+    <div class="sp-logo">⚓</div>
+    <div class="sp-title">Marine Gas Console</div>
+    <div class="sp-sub">Detection · Calibration · Reference</div>
+    <div class="sp-line"></div>
+    <button class="sp-enter" onclick="enterApp()">Enter Console</button>
+  </div>
+</div>
+
+<!-- ════════ APP ════════ -->
+<div class="app">
+  <div class="scrim" id="scrim" onclick="closeNav()"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand">
+      <div class="sb-logo">⚓</div>
+      <div><h1>Gas Console</h1><p>Tanker Ops Reference</p></div>
+    </div>
+    <nav class="sb-nav" id="sbNav">
+      <button class="sb-item on" data-tab="sensor"    onclick="go('sensor',this)"><span class="ic">🔬</span>Sensor Guide</button>
+      <button class="sb-item"    data-tab="library"   onclick="go('library',this)"><span class="ic">📚</span>Gas Library</button>
+      <button class="sb-item"    data-tab="converter" onclick="go('converter',this)"><span class="ic">⚡</span>Converter</button>
+      <button class="sb-item"    data-tab="regs"      onclick="go('regs',this)"><span class="ic">📋</span>Regulations</button>
+      <button class="sb-item"    data-tab="procedure" onclick="go('procedure',this)"><span class="ic">✅</span>Procedure</button>
+      <button class="sb-item"    data-tab="glossary"  onclick="go('glossary',this)"><span class="ic">📖</span>Units & Glossary</button>
+    </nav>
+    <div class="sb-foot">
+      <div class="sb-pill"><span class="sb-dot"></span>Offline Ready</div>
+      Reference only — verify against manufacturer manual &amp; vessel SMS.
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <button class="hamb" onclick="openNav()">☰</button>
+      <div class="tb-title" id="tbTitle">Sensor Guide <span>· SOLAS · ISGOTT · IGC / IBC</span></div>
+      <div class="tb-right"><div class="tb-pill">v2.0</div></div>
+    </div>
+
+    <div class="page">
+
+    <!-- ─── TAB 1 · SENSOR ─── -->
+    <section class="tp on" id="tab-sensor">
+      <div class="stitle">Gas Sensor Calibration Guide</div>
+      <div class="ib warn">
+        <span class="ib-ico">⚠️</span>
+        <div class="ib-body"><strong>Manufacturer Manual Is Primary Authority</strong>
+        Correction Factors are instrument-specific. Always obtain exact CFs from your instrument's manual. This guide provides general maritime reference and principles.</div>
+      </div>
+      <div class="card">
+        <div class="lbl" style="margin-bottom:6px">Select Sensor / Target Gas</div>
+        <select id="senSel" onchange="renderSensor()">
+          <option value="">— Choose sensor type —</option>
+          <optgroup label="HC Sensors (Flammable Gas — %LEL)">
+            <option value="pch4">Pellistor / Catalytic Bead — CH₄ (Methane target)</option>
+            <option value="pc3h8">Pellistor / Catalytic Bead — C₃H₈ (Propane target)</option>
+            <option value="ph2">Pellistor — H₂ (Hydrogen specific)</option>
+            <option value="irch4">IR / NDIR — CH₄ / Hydrocarbons</option>
+          </optgroup>
+          <optgroup label="Toxic Gas Sensors (ppm)">
+            <option value="ech2s">Electrochemical — H₂S (Hydrogen Sulfide)</option>
+            <option value="ecco">Electrochemical — CO (Carbon Monoxide)</option>
+            <option value="ecso2">Electrochemical — SO₂ (Sulfur Dioxide)</option>
+            <option value="ecnh3">Electrochemical — NH₃ (Ammonia)</option>
+            <option value="pid">PID — VOCs / Benzene / Aromatics</option>
+          </optgroup>
+          <optgroup label="Safety / Atmosphere Sensors">
+            <option value="eco2">Electrochemical — O₂ (Oxygen)</option>
+            <option value="irco2">IR / NDIR — CO₂ (Carbon Dioxide)</option>
+          </optgroup>
+        </select>
+      </div>
+      <div id="sensorOut">
+        <div style="text-align:center;padding:42px 20px;color:var(--dim)">
+          <div style="font-size:40px;margin-bottom:10px;filter:grayscale(1)">🔬</div>
+          <div>Select a sensor type above to see calibration recommendations</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── TAB 2 · LIBRARY ─── -->
+    <section class="tp" id="tab-library">
+      <div class="stitle">Gas Properties Library</div>
+      <div class="sfbar"><input type="text" id="gsearch" placeholder="Search gas name or formula (e.g. H₂S or propane)…" oninput="renderGasLib()"></div>
+      <div class="fgrp" id="catBtns">
+        <button class="fb on" onclick="setCat('ALL',this)">All</button>
+        <button class="fb" onclick="setCat('HC',this)">HC Aliphatic</button>
+        <button class="fb" onclick="setCat('Aromatic',this)">Aromatic</button>
+        <button class="fb" onclick="setCat('Unsat',this)">Unsaturated</button>
+        <button class="fb" onclick="setCat('Toxic',this)">Toxic</button>
+        <button class="fb" onclick="setCat('Asph',this)">Asphyxiant</button>
+        <button class="fb" onclick="setCat('Spec',this)">O₂ / Special</button>
+        <button class="fb" onclick="setCat('Chem',this)">Chemical Cargo</button>
+      </div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>Gas</th><th>Formula</th><th>Cat.</th>
+          <th data-i="LEL">LEL</th><th data-i="UEL">UEL</th><th data-i="LEL50">50% LEL</th>
+          <th data-i="MW">MW</th><th data-i="VD">VD</th>
+          <th data-i="TWA">TLV-TWA</th><th data-i="STEL">STEL</th><th data-i="IDLH">IDLH</th>
+          <th>Unit</th><th>Notes</th>
+        </tr></thead>
+        <tbody id="gasBody"></tbody>
+      </table></div>
+      <div class="ib info" style="margin-top:12px">
+        <span class="ib-ico">ℹ️</span>
+        <div class="ib-body"><strong>Legend — tap any ⓘ in the headers for full definitions</strong>
+        VD ↑ = lighter than air, ↓ = heavier than air. SA = Simple Asphyxiant. 50% LEL = standard span calibration concentration.</div>
+      </div>
+    </section>
+
+    <!-- ─── TAB 3 · CONVERTER ─── -->
+    <section class="tp" id="tab-converter">
+      <div class="stitle">Unit Converter</div>
+      <div class="snav">
+        <button class="snb on" onclick="swSub('conv','lel',this)">🔥 LEL ↔ Vol%</button>
+        <button class="snb" onclick="swSub('conv','ppm',this)">🧪 ppm ↔ Vol% ↔ mg/m³</button>
+        <button class="snb" onclick="swSub('conv','flow',this)">💨 Flow Rate</button>
+      </div>
+
+      <div id="conv-lel">
+        <div class="card">
+          <div class="ch"><span>🔥</span><span class="ct">%LEL ↔ %vol Converter</span></div>
+          <div class="cig"><label class="lbl">Select Gas</label>
+            <select id="lelGas" onchange="clrLEL()"><option value="">— Select gas —</option></select></div>
+          <div class="cgrid">
+            <div class="cig"><label class="lbl">Enter %LEL</label>
+              <input type="number" id="lelIn" placeholder="e.g. 50" min="0" max="200" oninput="fromLEL()"></div>
+            <div class="cig"><label class="lbl">Enter %vol</label>
+              <input type="number" id="volIn" placeholder="e.g. 2.5" min="0" oninput="fromVol()"></div>
+          </div>
+          <div id="lelRes" class="cres" style="display:none">
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">Conversion Results</div>
+            <div class="crgrid" id="lelGrid"></div>
+          </div>
+          <div class="divider"></div>
+          <div class="sub">Calibration Gas Reference — 50% LEL = standard span</div>
+          <div class="tw"><table>
+            <thead><tr><th>Gas</th><th data-i="LEL">LEL</th><th data-i="UEL">UEL</th><th>25% LEL</th><th>50% LEL</th><th>100% LEL</th></tr></thead>
+            <tbody id="lelRef"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <div id="conv-ppm" style="display:none">
+        <div class="card">
+          <div class="ch"><span>🧪</span><span class="ct">ppm ↔ %vol ↔ mg/m³ Converter</span></div>
+          <div class="ib info"><span class="ib-ico">ℹ️</span>
+            <div class="ib-body">mg/m³ is temperature-dependent. Formula: mg/m³ = ppm × MW ÷ Vₘ, where molar volume Vₘ = 22.414 × (T+273.15)/273.15. At 25 °C, Vₘ = 24.465 L/mol.</div></div>
+          <div class="cig"><label class="lbl">Quick-fill from gas (auto-sets MW)</label>
+            <select id="ppmGasSel" onchange="ppmPickGas()"><option value="">— optional: pick a gas —</option></select></div>
+          <div class="cgrid">
+            <div>
+              <div class="cig"><label class="lbl">Molecular Weight <span class="info-badge" data-i="MW">i</span></label>
+                <input type="number" id="pMW" placeholder="e.g. 34.08 (H₂S)" min="1" oninput="fromPPM()"></div>
+              <div class="cig"><label class="lbl">Temperature (°C)</label>
+                <input type="number" id="pTemp" value="25" min="-20" max="60" oninput="fromPPM()"></div>
+            </div>
+            <div>
+              <div class="cig"><label class="lbl">Enter ppm <span class="info-badge" data-i="ppm">i</span></label>
+                <input type="number" id="pIn" placeholder="e.g. 25" min="0" oninput="fromPPM()"></div>
+              <div class="cig"><label class="lbl">Enter %vol</label>
+                <input type="number" id="pvIn" placeholder="e.g. 0.0025" oninput="fromPVol()"></div>
+              <div class="cig"><label class="lbl">Enter mg/m³ <span class="info-badge" data-i="MGM3">i</span></label>
+                <input type="number" id="mgIn" placeholder="e.g. 35" min="0" oninput="fromMG()"></div>
+            </div>
+          </div>
+          <div id="ppmRes" class="cres" style="display:none">
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">Conversion Results</div>
+            <div class="crgrid" id="ppmGrid"></div>
+          </div>
+          <div class="divider"></div>
+          <div class="sub">Toxic Gas Quick Reference (ACGIH TLV · NIOSH IDLH) @ 25 °C</div>
+          <div class="tw"><table>
+            <thead><tr><th>Gas</th><th data-i="MW">MW</th><th data-i="TWA">TLV-TWA</th><th>TLV %vol</th><th>TLV mg/m³</th><th data-i="IDLH">IDLH</th><th>IDLH mg/m³</th></tr></thead>
+            <tbody id="ppmRef"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <div id="conv-flow" style="display:none">
+        <div class="card">
+          <div class="ch"><span>💨</span><span class="ct">Calibration Gas Flow Rate Converter</span></div>
+          <div class="ib info"><span class="ib-ico">ℹ️</span>
+            <div class="ib-body"><strong>NL = Normal Litre</strong> (0 °C, 101.325 kPa). <strong>SL = Standard Litre</strong> (20 °C, 101.325 kPa, ISO). Actual L/min varies with temperature; NL/SL are referenced to a fixed temperature. NL/min = L/min × 273.15 ÷ (273.15 + T). SL/min = L/min × 293.15 ÷ (273.15 + T).</div></div>
+          <div class="cgrid">
+            <div>
+              <div class="cig"><label class="lbl">Enter L/min (actual)</label>
+                <input type="number" id="fLpm" placeholder="e.g. 1.0" min="0" step="0.1" oninput="calcFlow()"></div>
+              <div class="cig"><label class="lbl">Ambient Temperature (°C)</label>
+                <input type="number" id="fTemp" value="25" min="-20" max="60" oninput="calcFlow()"></div>
+            </div>
+            <div id="flowRes" style="display:flex;align-items:center;justify-content:center">
+              <div style="color:var(--dim);font-size:.8rem;text-align:center">Enter flow rate →</div>
+            </div>
+          </div>
+          <div class="ib tip" style="margin-top:12px"><span class="ib-ico">✅</span>
+            <div class="ib-body"><strong>Typical Calibration Flow Rates:</strong> Portable aspirated 0.5–1.0 L/min · Fixed detector 0.5–2.0 L/min · PID 0.3–0.5 L/min · Diffusion instruments need no external flow. Always apply gas at slightly higher flow than sensor demand for a stable reading.</div></div>
+          <div class="divider"></div>
+          <div class="sub">Flow Rate Reference Table (at 25 °C ambient)</div>
+          <div class="tw"><table>
+            <thead><tr><th>L/min</th><th>L/hr</th><th>mL/min</th><th>NL/min (0°C)</th><th>NL/hr (0°C)</th><th>SL/min (20°C)</th></tr></thead>
+            <tbody id="flowTbl"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── TAB 4 · REGS ─── -->
+    <section class="tp" id="tab-regs">
+      <div class="stitle">Regulatory Reference</div>
+      <div class="card"><div class="ch"><span>🫧</span><span class="ct">Oxygen (O₂) Action Levels</span></div><div id="o2Levels"></div></div>
+      <div class="card"><div class="ch"><span>🔥</span><span class="ct">Flammable Gas (%LEL) Action Levels</span></div><div id="lelLevels"></div></div>
+      <div class="card"><div class="ch"><span>☠️</span><span class="ct">Toxic Gas Exposure Limits</span></div>
+        <div class="tw"><table>
+          <thead><tr><th>Gas</th><th data-i="TWA">TLV-TWA</th><th data-i="STEL">STEL</th><th data-i="IDLH">IDLH</th><th>Ship Alarm</th><th>Key Remark</th></tr></thead>
+          <tbody id="toxTbl"></tbody>
+        </table></div></div>
+      <div class="card"><div class="ch"><span>🚪</span><span class="ct">Enclosed Space Entry (ISGOTT 6th Ed.)</span></div><div id="entryReqs"></div></div>
+      <div class="card"><div class="ch"><span>⚖️</span><span class="ct">SOLAS / IMO / IBC / IGC Requirements</span></div><div id="solasReqs"></div></div>
+    </section>
+
+    <!-- ─── TAB 5 · PROCEDURE ─── -->
+    <section class="tp" id="tab-procedure">
+      <div class="stitle">Calibration Procedure &amp; Checklists</div>
+      <div class="snav">
+        <button class="snb on" onclick="swSub('proc','bump',this)">⚡ Bump Test</button>
+        <button class="snb" onclick="swSub('proc','zero',this)">⚙️ Zero Cal</button>
+        <button class="snb" onclick="swSub('proc','span',this)">🎯 Span Cal</button>
+        <button class="snb" onclick="swSub('proc','full',this)">📋 Full Procedure</button>
+        <button class="snb" onclick="swSub('proc','log',this)">📝 Record Log</button>
+      </div>
+      <div id="proc-bump"></div>
+      <div id="proc-zero" style="display:none"></div>
+      <div id="proc-span" style="display:none"></div>
+      <div id="proc-full" style="display:none"></div>
+      <div id="proc-log"  style="display:none"></div>
+    </section>
+
+    <!-- ─── TAB 6 · GLOSSARY ─── -->
+    <section class="tp" id="tab-glossary">
+      <div class="stitle">Units &amp; Glossary</div>
+      <div class="ib info"><span class="ib-ico">📖</span>
+        <div class="ib-body"><strong>Full forms &amp; plain-language explanations</strong>
+        Every abbreviation used in this tool. The same definitions pop up when you tap any ⓘ badge elsewhere in the app.</div></div>
+      <div class="sfbar"><input type="text" id="glsearch" placeholder="Search term, abbreviation or full form…" oninput="renderGlossary()"></div>
+      <div id="glossaryOut"></div>
+    </section>
+
+    </div><!-- .page -->
+  </div><!-- .main -->
+</div><!-- .app -->
+
+<!-- ════════ INFO MODAL ════════ -->
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeInfo()">
+  <div class="modal">
+    <div class="modal-grip"></div>
+    <div class="modal-abbr" id="mAbbr"></div>
+    <div class="modal-full" id="mFull"></div>
+    <div class="modal-desc" id="mDesc"></div>
+    <div class="modal-meta" id="mMeta"></div>
+    <button class="modal-close" onclick="closeInfo()">Got it</button>
+  </div>
+</div>
+
+<script>
+// ══════════ GLOSSARY (full forms + plain explanations) ══════════
+const GLOSSARY = {
+  LEL:{full:'Lower Explosive Limit',cat:'Measurement Units',desc:'The lowest concentration of a gas/vapour in air (by volume %) that can ignite and sustain a flame. Below the LEL the mixture is too lean to burn. Also called LFL (Lower Flammable Limit). Detectors report flammable gas as a percentage of the LEL — e.g. 50% LEL means half the concentration needed to explode.',meta:'Expressed as % of LEL or % by volume.'},
+  UEL:{full:'Upper Explosive Limit',cat:'Measurement Units',desc:'The highest concentration of a gas in air that can still ignite. Above the UEL the mixture is too rich (too little oxygen) to burn — but it becomes flammable again if diluted back through the explosive range, so a "too rich" reading is never safe.',meta:'Between LEL and UEL = the explosive range.'},
+  LEL50:{full:'50% of the Lower Explosive Limit',cat:'Measurement Units',desc:'The standard span-calibration concentration for flammable-gas sensors. Half the LEL by volume. Calibrating at 50% LEL checks sensor response in the middle of the alarm range.'},
+  MW:{full:'Molecular Weight (Molar Mass)',cat:'Measurement Units',desc:'The mass of one mole of the gas in grams per mole (g/mol). Needed to convert between ppm and mg/m³, and it indicates how heavy the gas is. Compare against air (~29 g/mol): heavier gases sink, lighter ones rise.',meta:'Unit: g/mol.'},
+  VD:{full:'Vapour Density (relative to air)',cat:'Measurement Units',desc:'How heavy the gas vapour is compared with air (air = 1.00). VD > 1 sinks into bilges, tank bottoms and pits; VD < 1 rises to deckheads and high points. Critical for deciding where to place fixed sensors and where to expect gas to pool.',meta:'Air = 1.00. ↓ heavier, ↑ lighter.'},
+  ppm:{full:'Parts Per Million',cat:'Measurement Units',desc:'Concentration unit for trace/toxic gases — 1 ppm = 1 volume of gas per 1,000,000 volumes of air. 10,000 ppm = 1% by volume. Used for exposure limits where even tiny amounts matter.'},
+  ppb:{full:'Parts Per Billion',cat:'Measurement Units',desc:'One thousand times finer than ppm — 1,000 ppb = 1 ppm. Used for extremely toxic species at very low limits.'},
+  MGM3:{full:'Milligrams per Cubic Metre (mg/m³)',cat:'Measurement Units',desc:'Mass-based concentration: milligrams of gas per cubic metre of air. Converts from ppm using molecular weight and temperature: mg/m³ = ppm × MW ÷ molar volume. Many regulatory limits are quoted in mg/m³.',meta:'Temperature-dependent.'},
+  STP:{full:'Standard Temperature and Pressure',cat:'Measurement Units',desc:'A fixed reference condition for gas volume. "Normal" conditions are 0 °C and 101.325 kPa (molar volume 22.414 L/mol). Volumes referenced to STP do not change with ambient temperature, unlike actual measured volume.'},
+  NL:{full:'Normal Litre (0 °C, 101.325 kPa)',cat:'Measurement Units',desc:'A litre of gas measured at 0 °C and standard pressure. Calibration-gas flow is often referenced to NL so it is independent of ambient temperature. NL/min = actual L/min × 273.15 ÷ (273.15 + T °C).'},
+  SL:{full:'Standard Litre (20 °C, 101.325 kPa, ISO)',cat:'Measurement Units',desc:'A litre of gas referenced to 20 °C (ISO standard) and standard pressure. SL/min = actual L/min × 293.15 ÷ (273.15 + T °C). At exactly 20 °C ambient, SL/min equals the actual flow.'},
+  TLV:{full:'Threshold Limit Value (ACGIH)',cat:'Exposure Limits',desc:'Airborne concentration guideline from the ACGIH below which nearly all workers may be exposed repeatedly without adverse effect. Comes in three forms: TWA (8-hour average), STEL (15-min), and Ceiling (never exceed).'},
+  TWA:{full:'Time-Weighted Average (TLV-TWA)',cat:'Exposure Limits',desc:'The average airborne concentration permitted over a normal 8-hour working day / 40-hour week. Short excursions above are allowed if the 8-hour average stays at or below the limit. The everyday "is this space safe to work in" benchmark.'},
+  STEL:{full:'Short-Term Exposure Limit',cat:'Exposure Limits',desc:'The maximum concentration allowed over any 15-minute period, even if the 8-hour TWA is within limits. Protects against acute effects from brief high exposures. Should not occur more than 4 times a day with 60 min between excursions.'},
+  IDLH:{full:'Immediately Dangerous to Life or Health (NIOSH)',cat:'Exposure Limits',desc:'The concentration that poses an immediate threat to life, would cause irreversible health effects, or would impair escape within 30 minutes. Entry at or above IDLH demands self-contained breathing apparatus and full emergency precautions.'},
+  SA:{full:'Simple Asphyxiant',cat:'Exposure Limits',desc:'A gas that is not itself toxic but kills by displacing oxygen (e.g. N₂, methane, CO₂ in bulk). It has no specific TLV because the hazard is oxygen deficiency — monitor O₂, not the gas.'},
+  CF:{full:'Correction Factor',cat:'Sensor Technology',desc:'A multiplier applied to a flammable-gas reading when the sensor is calibrated on one gas but used to detect another. The sensor responds differently to each gas; the CF (from the instrument manual) converts the displayed value to the true concentration of the target gas.'},
+  RF:{full:'Response Factor',cat:'Sensor Technology',desc:'The PID equivalent of a correction factor. A PID is usually calibrated on isobutylene; the response factor scales its reading to the actual VOC being measured (e.g. benzene). Actual ppm = reading ÷ RF (or × CF depending on convention — check the manual).'},
+  PID:{full:'Photoionisation Detector',cat:'Sensor Technology',desc:'Uses ultraviolet light (commonly a 10.6 eV lamp) to ionise gas molecules; the resulting current is proportional to concentration. Detects VOCs and aromatics (benzene, toluene) down to ppb. Cannot see gases whose ionisation energy exceeds the lamp — methane and ethane are invisible to a standard PID.'},
+  NDIR:{full:'Non-Dispersive Infrared',cat:'Sensor Technology',desc:'Measures how much infrared light a gas absorbs at its characteristic wavelength. Species-selective and, unlike pellistors, works in oxygen-free atmospheres (inert gas, nitrogen). Common for CO₂ and hydrocarbon monitoring.'},
+  EC:{full:'Electrochemical Cell',cat:'Sensor Technology',desc:'A sensor where the target gas reacts at an electrode producing a current proportional to concentration. Standard for toxic gases (H₂S, CO, SO₂, NH₃) and oxygen. Cells have a finite service life and an expiry date — replace on schedule.'},
+  IE:{full:'Ionisation Energy',cat:'Sensor Technology',desc:'The energy (in electron-volts, eV) needed to ionise a molecule. A PID can only detect gases whose IE is below its lamp energy. CH₄ (12.6 eV) and ethane (11.5 eV) are above a 10.6 eV lamp and go undetected.'},
+  Pellistor:{full:'Pellistor / Catalytic Bead',cat:'Sensor Technology',desc:'A flammable-gas sensor that burns the gas on a heated catalytic bead; the heat changes resistance, giving a %LEL reading. Needs at least ~10% oxygen to work, must be zeroed in fresh air (never nitrogen), and is permanently poisoned by halogens and silicones.'},
+  SCBA:{full:'Self-Contained Breathing Apparatus',cat:'Operational',desc:'A wearable air supply (cylinder + mask) that lets a person breathe independently of the surrounding atmosphere. Mandatory for entry into oxygen-deficient or IDLH atmospheres.'},
+  ISGOTT:{full:'International Safety Guide for Oil Tankers & Terminals',cat:'Regulations & Bodies',desc:'The industry standard guidance (jointly by OCIMF, ICS and IAPH) for safe tanker and terminal operations, including enclosed-space entry criteria, gas-freeing and hot-work limits. Currently 6th Edition.'},
+  SOLAS:{full:'Safety Of Life At Sea',cat:'Regulations & Bodies',desc:'The principal IMO convention on ship safety. Chapter II-2 covers fire protection and fixed gas-detection requirements; II-1 covers construction and machinery.'},
+  MARPOL:{full:'Marine Pollution (MARPOL 73/78)',cat:'Regulations & Bodies',desc:'The IMO convention preventing pollution from ships. Annex I (oil) sets inert-gas and tank-atmosphere requirements relevant to gas detection. Six annexes cover oil, chemicals, packaged HNS, sewage, garbage and air pollution.'},
+  IGC:{full:'International Gas Carrier Code',cat:'Regulations & Bodies',desc:'IMO code for ships carrying liquefied gases in bulk (LNG, LPG). Chapter 13 sets cargo-area gas-detection requirements, species-specific to the cargo carried.'},
+  IBC:{full:'International Bulk Chemical Code',cat:'Regulations & Bodies',desc:'IMO code for chemical tankers carrying dangerous liquid chemicals in bulk. Chapter 13 sets vapour-detection requirements specific to each chemical cargo.'},
+  ISM:{full:'International Safety Management Code',cat:'Regulations & Bodies',desc:'IMO code requiring every ship to operate under a documented Safety Management System (SMS). Gas-detector maintenance, calibration records and emergency procedures live under the ISM/SMS framework.'},
+  SMS:{full:'Safety Management System',cat:'Operational',desc:'The ship/company-specific documented system of procedures required under the ISM Code. It defines calibration intervals, entry permits and record-keeping — always the working authority alongside the manufacturer manual.'},
+  SIRE:{full:'Ship Inspection Report Programme (OCIMF)',cat:'Regulations & Bodies',desc:'OCIMF\'s tanker vetting inspection programme. SIRE 2.0 inspectors check that gas detectors are within calibration, bump-test logs are kept, and calibration-gas certificates are available.'},
+  VIQ:{full:'Vessel Inspection Questionnaire',cat:'Regulations & Bodies',desc:'The structured question set used by SIRE inspectors during a tanker vetting inspection.'},
+  ACGIH:{full:'American Conference of Governmental Industrial Hygienists',cat:'Regulations & Bodies',desc:'The body that publishes Threshold Limit Values (TLVs) for occupational exposure. Widely referenced for TWA and STEL limits.'},
+  NIOSH:{full:'National Institute for Occupational Safety & Health',cat:'Regulations & Bodies',desc:'US federal agency that publishes IDLH values and recommended exposure limits.'},
+  OCIMF:{full:'Oil Companies International Marine Forum',cat:'Regulations & Bodies',desc:'Industry association behind ISGOTT and the SIRE tanker vetting programme.'},
+  IG:{full:'Inert Gas',cat:'Operational',desc:'Oxygen-depleted gas (typically flue gas or nitrogen) pumped into cargo tanks to keep the atmosphere below the flammable range. SOLAS/MARPOL require O₂ in the IG-filled tank atmosphere to stay low (≤ 8% vol). Produces CO, SO₂ and CO₂ as by-products.'},
+  VOC:{full:'Volatile Organic Compound',cat:'Operational',desc:'Carbon-based compounds that evaporate readily at ambient temperature — benzene, toluene, xylene and crude-oil vapours. Best detected with a PID.'},
+  HC:{full:'Hydrocarbon',cat:'Operational',desc:'Compounds of hydrogen and carbon — the flammable gases and vapours from oil and gas cargoes (methane, propane, crude vapour). Detected as %LEL by pellistor or IR sensors.'},
+  DWT:{full:'Deadweight Tonnage',cat:'Operational',desc:'The total weight a ship can safely carry (cargo, fuel, stores, crew) in tonnes. Used in regulations to define which vessels a requirement applies to.'},
+  GT:{full:'Gross Tonnage',cat:'Operational',desc:'A measure of a ship\'s total internal volume (not weight). Used as a threshold in many SOLAS requirements.'},
+  HFO:{full:'Heavy Fuel Oil',cat:'Operational',desc:'Residual marine fuel. Its combustion in the inert-gas plant and boilers produces SO₂ and CO that can appear in tank atmospheres.'},
+  OOW:{full:'Officer Of the Watch',cat:'Operational',desc:'The navigating/cargo officer in charge of the watch, to be alerted on gas alarms.'},
+  HSE:{full:'Health, Safety & Environment',cat:'Operational',desc:'The umbrella term for occupational safety planning, including cargo-specific exposure-control plans.'},
+  VCM:{full:'Vinyl Chloride Monomer',cat:'Operational',desc:'A carcinogenic chemical-tanker cargo (C₂H₃Cl). Being halogenated, it permanently poisons pellistor catalysts — monitor with a PID or dedicated IR sensor only.'}
+};
+
+// ══════════ GAS DATA ══════════
+const GAS = [
+  {id:'ch4',  name:'Methane',     f:'CH₄',      cat:'HC',    mw:16.04, vd:0.55, lel:5.0,  uel:15.0, unit:'%LEL', twa:'SA',       stel:null,       idlh:'—',         note:'LNG cargo. Lightest HC (VD 0.55) — rises immediately. Main component of natural gas.'},
+  {id:'c2h6', name:'Ethane',      f:'C₂H₆',     cat:'HC',    mw:30.07, vd:1.04, lel:3.0,  uel:12.5, unit:'%LEL', twa:'SA',       stel:null,       idlh:'—',         note:'LPG / NGL component. Near air density. LNG carrier boil-off.'},
+  {id:'c3h8', name:'Propane',     f:'C₃H₈',     cat:'HC',    mw:44.10, vd:1.52, lel:2.1,  uel:9.5,  unit:'%LEL', twa:'SA',       stel:null,       idlh:'—',         note:'LPG. Heavier than air — sinks to deck, bilges. Most common portable cal gas.'},
+  {id:'nc4',  name:'n-Butane',    f:'n-C₄H₁₀',  cat:'HC',    mw:58.12, vd:2.00, lel:1.8,  uel:8.5,  unit:'%LEL', twa:'SA',       stel:null,       idlh:'—',         note:'LPG component. Sinks to lowest point. Used in some cal gas mixtures.'},
+  {id:'ic4',  name:'iso-Butane',  f:'i-C₄H₁₀',  cat:'HC',    mw:58.12, vd:2.01, lel:1.8,  uel:8.4,  unit:'%LEL', twa:'SA',       stel:null,       idlh:'—',         note:'LPG component. Heavier than air. Very similar LEL/UEL to n-butane.'},
+  {id:'nc5',  name:'n-Pentane',   f:'n-C₅H₁₂',  cat:'HC',    mw:72.15, vd:2.49, lel:1.4,  uel:7.8,  unit:'%LEL', twa:'600 ppm',  stel:null,       idlh:'1500 ppm',  note:'Crude oil. Common portable cal gas canister. Low LEL — detector sensitivity critical.'},
+  {id:'ic5',  name:'iso-Pentane', f:'i-C₅H₁₂',  cat:'HC',    mw:72.15, vd:2.49, lel:1.4,  uel:7.6,  unit:'%LEL', twa:'600 ppm',  stel:null,       idlh:'1500 ppm',  note:'Very common portable cal gas (isobutane/isopentane canisters). Crude oil vapour.'},
+  {id:'nc6',  name:'n-Hexane',    f:'C₆H₁₄',    cat:'HC',    mw:86.18, vd:2.97, lel:1.1,  uel:7.5,  unit:'%LEL', twa:'50 ppm',   stel:null,       idlh:'1100 ppm',  note:'Crude oil. Low TLV — neurotoxic. Heavier vapour (VD 2.97). Critical TLV compliance.'},
+  {id:'nc7',  name:'n-Heptane',   f:'C₇H₁₆',    cat:'HC',    mw:100.2, vd:3.45, lel:1.05, uel:6.7,  unit:'%LEL', twa:'400 ppm',  stel:'500 ppm',  idlh:'750 ppm',   note:'Crude oil. Very heavy vapour. Low LEL needs sensitive detector.'},
+  {id:'nc8',  name:'n-Octane',    f:'C₈H₁₈',    cat:'HC',    mw:114.2, vd:3.94, lel:1.0,  uel:6.5,  unit:'%LEL', twa:'300 ppm',  stel:null,       idlh:'1000 ppm',  note:'Crude oil. Lowest LEL of common HC — 1.0%vol. Heavier-than-air vapour.'},
+  {id:'h2',   name:'Hydrogen',    f:'H₂',        cat:'HC',    mw:2.02,  vd:0.07, lel:4.0,  uel:75.0, unit:'%LEL', twa:'SA',       stel:null,       idlh:'—',         note:'Battery charging, fuel cells, LNG boil-off. Lightest gas — rises instantly. Very wide flammable range (4–75%). Standard pellistor UNRELIABLE for H₂.'},
+  {id:'bzn',  name:'Benzene',     f:'C₆H₆',     cat:'Aromatic', mw:78.11, vd:2.70, lel:1.2, uel:7.8, unit:'ppm', twa:'0.5 ppm', stel:'2.5 ppm', idlh:'500 ppm',  note:'⚠ CARCINOGEN (IARC Group 1). Crude oil tankers. PELLISTOR CANNOT detect at TLV — must use PID sensor. No safe exposure level.'},
+  {id:'tol',  name:'Toluene',     f:'C₇H₈',     cat:'Aromatic', mw:92.14, vd:3.18, lel:1.1, uel:7.1, unit:'ppm', twa:'20 ppm',  stel:null,       idlh:'500 ppm',  note:'Chemical tanker. Neurotoxin, CNS depressant. PID recommended for low-ppm detection.'},
+  {id:'xyl',  name:'Xylene',      f:'C₈H₁₀',    cat:'Aromatic', mw:106.2, vd:3.66, lel:1.0, uel:6.0, unit:'ppm', twa:'100 ppm', stel:'150 ppm', idlh:'900 ppm',  note:'Chemical tanker. Three isomers (o, m, p-xylene). Very heavy vapour.'},
+  {id:'c2h4', name:'Ethylene',    f:'C₂H₄',     cat:'Unsat', mw:28.05, vd:0.97, lel:2.7,  uel:36.0, unit:'%LEL', twa:'200 ppm',  stel:null,       idlh:'—',         note:'Chemical/gas carrier. Very wide UEL (36%). Near air density. Asphyxiant.'},
+  {id:'c2h2', name:'Acetylene',   f:'C₂H₂',     cat:'Unsat', mw:26.04, vd:0.90, lel:2.5,  uel:100,  unit:'%LEL', twa:'SA',       stel:null,       idlh:'—',         note:'Welding. UEL=100% — detonates without O₂ above 200 kPa. Extreme hazard. Never compress freely >200 kPa.'},
+  {id:'vcm',  name:'Vinyl Chloride (VCM)', f:'C₂H₃Cl', cat:'Chem', mw:62.49, vd:2.15, lel:3.6, uel:33.0, unit:'ppm', twa:'1 ppm', stel:null, idlh:'NIOSH: cancer', note:'⚠ CARCINOGEN. Chemical tanker. HALOGENATED — permanently poisons pellistor catalyst. MUST use PID or dedicated IR sensor.'},
+  {id:'bd',   name:'1,3-Butadiene',f:'C₄H₆',   cat:'Chem', mw:54.09, vd:1.87, lel:2.0, uel:12.0, unit:'ppm', twa:'2 ppm', stel:null, idlh:'2000 ppm', note:'⚠ CARCINOGEN. Chemical tanker. Reactive — can auto-polymerize at temperature. Requires inhibitor.'},
+  {id:'h2s',  name:'Hydrogen Sulfide', f:'H₂S', cat:'Toxic', mw:34.08, vd:1.19, lel:4.0,  uel:44.0, unit:'ppm',  twa:'1 ppm',    stel:'5 ppm',    idlh:'50 ppm',    note:'⚠ SEVERE TOXIN. Crude oil / sour crude. Olfactory paralysis at >100 ppm — cannot rely on smell. Heavier than air — collects in bilges and pits. Fatal within minutes at high concentration.'},
+  {id:'co',   name:'Carbon Monoxide',  f:'CO',  cat:'Toxic', mw:28.01, vd:0.97, lel:12.5, uel:74.0, unit:'ppm',  twa:'25 ppm',   stel:'100 ppm',  idlh:'1200 ppm',  note:'Inert gas by-product (HFO combustion), confined space combustion. Binds haemoglobin 200× more than O₂. Colourless, odourless. CO + H₂ electrochemical cross-sensitivity issue.'},
+  {id:'co2',  name:'Carbon Dioxide',   f:'CO₂', cat:'Asph', mw:44.01, vd:1.52, lel:null, uel:null,  unit:'%vol/ppm', twa:'5000 ppm', stel:'30000 ppm', idlh:'40000 ppm', note:'Inert gas system, firefighting CO₂. Heavier than air — fills low spaces silently. IDLH = 40,000 ppm = 4% vol. Acts as asphyxiant + direct toxin.'},
+  {id:'so2',  name:'Sulfur Dioxide',   f:'SO₂', cat:'Toxic', mw:64.06, vd:2.21, lel:null, uel:null,  unit:'ppm',  twa:'0.25 ppm', stel:'0.5 ppm',  idlh:'100 ppm',   note:'Inert gas from HFO combustion. Extremely low TLV. Acrid odour — respiratory sensitiser. Very heavy gas (VD 2.21). Cross-sensitivity with H₂S sensors.'},
+  {id:'nh3',  name:'Ammonia',          f:'NH₃', cat:'Toxic', mw:17.03, vd:0.59, lel:15.0, uel:28.0, unit:'ppm',  twa:'25 ppm',   stel:'35 ppm',   idlh:'300 ppm',   note:'Refrigeration systems (cargo reefer). Lighter than air — sensor at ceiling. Strong odour detectable from <1 ppm. Caustic to respiratory tract and eyes.'},
+  {id:'o2',   name:'Oxygen',     f:'O₂',       cat:'Spec', mw:32.00, vd:1.10, lel:null, uel:null, unit:'%vol', twa:'19.5–23.5% (safe range)', stel:null, idlh:'N/A', note:'Normal: 20.9% vol. Deficient: <19.5% (asphyxia). Enriched: >23.5% (fire/explosion risk). Minimum for enclosed entry: 20.0% (ISGOTT). Electrochemical cell has limited life.'},
+  {id:'n2',   name:'Nitrogen',   f:'N₂',       cat:'Asph', mw:28.01, vd:0.97, lel:null, uel:null, unit:'O₂ depletion', twa:'SA', stel:null, idlh:'—', note:'Inerting / purging gas. Odourless, colourless. Detected only by O₂ depletion. Similar density to air. Silent asphyxiation risk.'}
+];
+
+// ══════════ SENSOR GUIDE DATA ══════════
+const SENS = {
+  pch4:{label:'Pellistor / Catalytic Bead — CH₄ (Methane Target)',type:'Pellistor / Catalytic Bead',
+    principle:'Catalytic combustion on heated platinum bead. Target gas oxidises on catalyst; heat released changes bead resistance. Requires minimum ~10% O₂ to function. Reports in %LEL referenced to CH₄.',
+    warns:['⚠ NEVER zero in nitrogen — pellistor needs O₂ to function. Zero ONLY in fresh air.','⚠ Halogenated gases (Freon, VCM, CCl₄) permanently POISON the catalyst — single short exposure can destroy sensor.','⚠ Silicone compounds (lubricant fumes, some rope coatings) also poison catalyst. Keep sensor clean.','⚠ CO₂-rich atmosphere (inert gas) degrades catalyst over time. Purge with fresh air before calibrating.'],
+    rec:[{gas:'Methane (CH₄) in air',conc:'2.5% vol = 50% LEL of CH₄',equiv:null,cf:'1.0 — no correction factor needed',note:'Exact match to target gas. Order certified CH₄/air reference gas at 50%LEL (2.5% vol ±2%). Most accurate calibration.'}],
+    ok:[{gas:'Propane (C₃H₈) in air',conc:'1.05% vol = 50% LEL of propane',equiv:'1.05% vol propane ≡ 21% LEL on CH₄ scale (1.05÷5.0×100)',cf:'Manufacturer-specific. Typically RF≈0.45, so CF≈2.0–2.2. Multiply sensor reading by CF.',under:true,note:'Sensor UNDERREADS actual CH₄. At 50% LEL propane applied, CH₄ sensor reads ≈21–25% LEL (NOT 50%). NEVER adjust instrument to show 50% without CF — this miscalibrates for CH₄ detection. Obtain exact CF from instrument manual.'},
+      {gas:'n-Butane (C₄H₁₀) in air',conc:'0.9% vol = 50% LEL of butane',equiv:'0.9% vol butane ≡ 18% LEL on CH₄ scale (0.9÷5.0×100)',cf:'Manufacturer-specific. CF typically 2.2–2.5.',under:true,note:'Greater underread than propane. CF from manual is mandatory. More common in fixed detector calibration.'},
+      {gas:'iso-Pentane (i-C₅H₁₂) in air',conc:'0.7% vol = 50% LEL of iso-pentane',equiv:'0.7% vol pentane ≡ 14% LEL on CH₄ scale (0.7÷5.0×100)',cf:'Manufacturer-specific.',under:true,note:'Common in portable canisters. Significant underread on CH₄ scale. CF mandatory.'}],
+    caut:[{gas:'Hydrogen (H₂) in air',reason:'Standard HC pellistors have inconsistent, non-linear, and catalyst-dependent response to H₂. May severely underread or overread H₂ LEL. DO NOT rely on standard CH₄ pellistor for H₂ monitoring. Use H₂-specific pellistor or IR sensor.'}],
+    bad:[{gas:'Carbon Monoxide (CO)',reason:'Catalytic bead sensor has essentially zero response to CO at measurable concentrations. Wrong sensor technology entirely.'},
+      {gas:'Nitrogen (N₂) as span or zero gas',reason:'Pellistor REQUIRES O₂ for catalytic combustion. No O₂ = no signal. Operating pellistor in O₂-free atmosphere degrades and can permanently damage catalyst beads.'},
+      {gas:'CO₂ atmosphere for calibration',reason:'CO₂-rich atmosphere (e.g. tank inert gas) poisons pellistor catalyst over time. Purge space with fresh air and calibrate only in clean air environment.'},
+      {gas:'Any halogenated compound (VCM, Freon, CCl₄, CFC)',reason:'Halogen atoms permanently POISON pellistor catalyst. Even a single brief exposure can render sensor useless. Irreversible damage.'},
+      {gas:'Silicone vapours (siloxanes)',reason:'Silicone from lubricants, greases, some gasket materials, and certain PPE lanyards poison catalyst. Keep calibration equipment and sensor free of silicone contamination.'}]},
+  pc3h8:{label:'Pellistor / Catalytic Bead — C₃H₈ (Propane Target)',type:'Pellistor / Catalytic Bead',
+    principle:'Same catalytic combustion technology as CH₄ pellistor. Scaled to report %LEL referenced to propane LEL (2.1% vol = 100% LEL propane).',
+    warns:['⚠ Same poison risks: halogens, silicones, N₂ zeroing — all same dangers as CH₄ pellistor.','⚠ Propane sinks (VD 1.52). Place fixed sensor at low level — near deck height.'],
+    rec:[{gas:'Propane (C₃H₈) in air',conc:'1.05% vol = 50% LEL of propane',equiv:null,cf:'1.0 — no correction needed',note:'Direct calibration gas. Certified propane/air reference bottle at 50% LEL = 1.05% vol.'}],
+    ok:[{gas:'Methane (CH₄) in air',conc:'2.5% vol = 50% LEL of CH₄',equiv:'2.5% vol CH₄ = 2.5÷2.1×100 = 119% LEL propane (above LEL!)',cf:'Manufacturer-specific. Check safe spanning concentration.',under:false,note:'Note: 50% LEL CH₄ (2.5%vol) = 119% LEL propane — above propane\'s LEL. Use lower CH₄ concentration or obtain manufacturer-approved procedure. Get CF from manual before proceeding.'},
+      {gas:'n-Butane (C₄H₁₀) in air',conc:'0.9% vol = 50% LEL of butane',equiv:'0.9% vol butane = 0.9÷2.1×100 = 43% LEL propane',cf:'Manufacturer-specific.',under:true,note:'Sensor underreads butane relative to propane calibration. CF required from manual.'}],
+    caut:[{gas:'Hydrogen (H₂)',reason:'Same unreliable response as on CH₄ pellistor. Do not use standard propane pellistor for H₂ monitoring.'}],
+    bad:[{gas:'Carbon Monoxide (CO)',reason:'No catalytic bead response to CO.'},{gas:'Nitrogen (N₂) for zero/span',reason:'Requires O₂ to function. Damages catalyst.'},{gas:'Halogenated compounds',reason:'Permanent catalyst poisoning.'}]},
+  ph2:{label:'Pellistor — H₂ (Hydrogen Specific)',type:'H₂-Specific Pellistor / Thermal Conductivity',
+    principle:'Modified catalyst pellistor or thermal conductivity (TC) sensor specifically characterised for hydrogen. Standard HC pellistors ARE NOT suitable for H₂ monitoring — different response curve and catalyst chemistry.',
+    warns:['⚠ Standard CH₄/HC pellistors are UNRELIABLE for H₂ — they may severely under or overread.','⚠ H₂ is extremely light (VD 0.07) — rises instantly. Sensor MUST be at ceiling/top level.','⚠ H₂ flammable range is 4–75% vol — very wide. Any ignition source in this range is catastrophic.','⚠ Battery charging rooms, fuel cell spaces: use dedicated H₂ sensor only.'],
+    rec:[{gas:'Hydrogen (H₂) in air',conc:'2.0% vol = 50% LEL of H₂',equiv:null,cf:'1.0',note:'Use only with H₂-specific pellistor or thermal conductivity sensor. Certified H₂/air reference gas at 2.0% vol (50% LEL H₂ = 4.0÷2 = 2.0% vol).'}],
+    ok:[],
+    caut:[{gas:'Methane (CH₄) as surrogate',reason:'Response of H₂-specific sensor to CH₄ may differ. Consult manufacturer before using CH₄ as alternative calibration gas.'}],
+    bad:[{gas:'Standard HC pellistor for H₂ measurement',reason:'Wrong sensor type. Unreliable response. Never use standard pellistor to monitor H₂ atmosphere.'},{gas:'Halogenated compounds',reason:'Same catalyst poison risk as HC pellistors.'}]},
+  irch4:{label:'IR / NDIR — CH₄ / Hydrocarbons',type:'Non-Dispersive Infrared (NDIR)',
+    principle:'IR absorption at HC-specific wavelength. More species-selective than pellistor. Works in O₂-depleted atmospheres (inert gas, N₂ purge). Suitable for inert gas monitoring scenarios where pellistors fail.',
+    warns:['✅ Unlike pellistors: IR CAN be zeroed in N₂ or CO₂ atmosphere.','⚠ IR sensors are more species-specific — substituting calibration gas causes larger errors than for pellistors.','⚠ Condensed water on optics degrades performance. Ensure dewpoint of calibration gas is appropriate.'],
+    rec:[{gas:'Methane (CH₄) in N₂ or air',conc:'2.5% vol = 50% LEL of CH₄',equiv:null,cf:'1.0',note:'CH₄-specific IR sensor must be calibrated with CH₄. Zero with N₂ or CO₂-free air, span with certified CH₄.'}],
+    ok:[{gas:'Propane (C₃H₈) — broadband IR sensors only',conc:'1.05% vol = 50% LEL propane',equiv:null,cf:'Manufacturer-specific — different from pellistor CF. Larger uncertainty.',under:false,note:'Only if manufacturer explicitly approves and supplies CF for broadband IR detectors. Wavelength-specific IR sensors cannot accept gas substitution.'}],
+    caut:[],
+    bad:[{gas:'Changing calibration gas without manufacturer approval',reason:'IR sensors are wavelength-specific. Wrong calibration gas causes large, hidden measurement errors without obvious warning.'},{gas:'Halogenated gases as calibration gas',reason:'Chlorinated/fluorinated compounds may degrade IR optics and cause permanent damage. Avoid.'}]},
+  ech2s:{label:'Electrochemical — H₂S (Hydrogen Sulfide)',type:'Amperometric Electrochemical Cell',
+    principle:'H₂S oxidises at working electrode; current produced is proportional to concentration. Highly sensitive. Cell has finite service life (typically 2–3 years). Cross-sensitivity to SO₂ is a critical concern for tanker use.',
+    warns:['⚠ Cell has finite life — replace per manufacturer schedule regardless of readings.','⚠ High H₂S concentration (>200 ppm) can SATURATE or damage cell. Control exposure during calibration.','⚠ SO₂ gives FALSE POSITIVE H₂S readings — inert gas systems produce SO₂.','⚠ OLFACTORY PARALYSIS at >100 ppm H₂S — NEVER rely on smell. Trust the detector only.','⚠ IDLH = 50 ppm. Fatal at sustained 300+ ppm. This is the most lethal gas on crude tankers.'],
+    rec:[{gas:'H₂S in N₂ (preferred) or air',conc:'25 ppm (typical) — verify with manufacturer',equiv:null,cf:'1.0',note:'Standard ship calibration gas. N₂-balance preferred for some cell types to avoid O₂ interference. Certified reference material required. Some instruments use 10 ppm or 50 ppm — check your instrument manual.'}],
+    ok:[],
+    caut:[{gas:'SO₂ (Sulfur Dioxide)',reason:'Many H₂S electrochemical cells cross-react with SO₂. SO₂ from inert gas system gives false-positive H₂S reading. Cannot use SO₂ to calibrate H₂S sensor. Be aware when entering spaces near IG system flue.'},{gas:'CO (Carbon Monoxide)',reason:'Low-level cross-sensitivity in some H₂S cell types. Consult manufacturer\'s cross-sensitivity table for your specific instrument.'}],
+    bad:[{gas:'Any HC gas (CH₄, propane, etc.)',reason:'Electrochemical H₂S sensor has no response to HC gases. Wrong sensor type.'},{gas:'SO₂ as calibration gas',reason:'Cross-sensitivity prevents accurate H₂S calibration even if reading appears correct. Use only certified H₂S gas.'},{gas:'>200 ppm H₂S calibration gas',reason:'Risk of saturating or permanently damaging electrochemical cell. Use only manufacturer-specified span concentration.'}]},
+  ecco:{label:'Electrochemical — CO (Carbon Monoxide)',type:'Amperometric Electrochemical Cell',
+    principle:'CO oxidised at working electrode; current proportional to CO concentration. H₂ cross-sensitivity is a well-documented issue — particularly relevant in battery charging rooms.',
+    warns:['⚠ H₂ causes false-positive CO readings in many electrochemical CO sensors.','⚠ In battery rooms: false CO alarms may occur during charging when H₂ is evolved.','⚠ Some modern CO sensors have built-in H₂ filters — check your instrument specification.'],
+    rec:[{gas:'CO in N₂ or air',conc:'50 ppm (typical) — verify with manufacturer',equiv:null,cf:'1.0',note:'Standard calibration: 50 ppm CO in air or N₂. Some instruments use 25 ppm or 100 ppm. Certified reference gas required.'}],
+    ok:[],
+    caut:[{gas:'H₂ (Hydrogen)',reason:'Many CO electrochemical sensors respond to H₂ and show false CO readings. Common issue in battery rooms, fuel cell spaces. Check if your sensor has H₂ cross-sensitivity and whether a H₂ filter is fitted.'}],
+    bad:[{gas:'Any HC gas',reason:'No electrochemical response to HC gases.'},{gas:'H₂S as calibration gas',reason:'Cross-sensitivity exists but concentration and direction vary — cannot reliably calibrate CO sensor with H₂S.'}]},
+  ecso2:{label:'Electrochemical — SO₂ (Sulfur Dioxide)',type:'Amperometric Electrochemical Cell',
+    principle:'SO₂ reduced at working electrode. Very low TLV (0.25 ppm) demands high sensor accuracy at sub-ppm levels. Primary ship source: inert gas system from HFO combustion.',
+    warns:['⚠ TLV-TWA is only 0.25 ppm — extremely sensitive monitoring required.','⚠ H₂S has cross-sensitivity with SO₂ sensor — both gases can be present in cargo spaces.'],
+    rec:[{gas:'SO₂ in N₂',conc:'5–25 ppm (manufacturer-specified)',equiv:null,cf:'1.0',note:'Handle with care — SO₂ is acutely irritating at calibration concentrations. Work in ventilated area. Certified reference material with traceable certificate.'}],
+    ok:[],
+    caut:[{gas:'H₂S',reason:'H₂S cross-reacts with SO₂ sensor. If both gases are present simultaneously, readings may be additive. Cannot use H₂S for SO₂ calibration.'}],
+    bad:[{gas:'Any HC gas',reason:'Wrong sensor type.'},{gas:'H₂S as calibration gas',reason:'Cross-sensitivity prevents accurate calibration.'}]},
+  ecnh3:{label:'Electrochemical — NH₃ (Ammonia)',type:'Amperometric Electrochemical Cell',
+    principle:'NH₃ oxidised at working electrode. Used for refrigeration system monitoring (cargo reefer, accommodation cooling). NH₃ is lighter than air — sensor placement critical.',
+    warns:['⚠ NH₃ is lighter than air (VD 0.59) — sensor MUST be at ceiling/high level, not at deck.','⚠ Strong odour warns at very low concentrations (<1 ppm) but can cause olfactory fatigue at sustained exposure.'],
+    rec:[{gas:'NH₃ in N₂ or air',conc:'25–100 ppm (manufacturer-specified)',equiv:null,cf:'1.0',note:'Certified ammonia calibration gas. Strong odour at concentration used — work in ventilated area. Verify actual required concentration from your instrument manual.'}],
+    ok:[],
+    caut:[],
+    bad:[{gas:'Any HC gas',reason:'Wrong sensor type.'},{gas:'H₂S or SO₂',reason:'Different chemistry — will not accurately calibrate NH₃ sensor.'}]},
+  pid:{label:'PID — VOCs (Benzene, Toluene, Xylene and other aromatics)',type:'Photoionisation Detector (PID)',
+    principle:'UV lamp (10.6 eV typical) ionises gas molecules above ionisation energy threshold. Ion current measured. Detects VOCs at ppm/ppb levels. NOT suitable for CH₄ (ionisation energy 12.6 eV > lamp). Essential for benzene TLV monitoring.',
+    warns:['⚠ PID is THE required sensor for benzene — pellistors CANNOT detect benzene at TLV level (0.5 ppm).','⚠ CH₄ (IE 12.6 eV), ethane (IE 11.5 eV) — NOT detected by standard 10.6 eV lamp.','⚠ High relative humidity (>90%) significantly reduces PID sensitivity. Clean lamp window regularly.','⚠ Lamp contamination (oil, condensate) quickly degrades performance. Keep clean and dry.'],
+    rec:[{gas:'Isobutylene (2-methylpropene) in air',conc:'100 ppm (PID factory standard)',equiv:null,cf:'Apply gas-specific response factor from manufacturer table',note:'Isobutylene at 100 ppm is the standard PID calibration gas. To read benzene: apply benzene correction factor (RF). Example: RF for benzene on 100 ppm isobutylene calibrated PID ≈ 0.5–0.6. So reading × 1/RF = actual benzene ppm.'},
+      {gas:'Benzene in N₂ (direct)',conc:'1–5 ppm (handle as carcinogen, ventilated area)',equiv:null,cf:'1.0 — direct benzene calibration',note:'Best accuracy for benzene monitoring but requires handling a known carcinogen. Use sealed regulator and appropriate PPE. Only for certified calibration technicians.'}],
+    ok:[{gas:'Any VOC with known PID response factor',conc:'Manufacturer-specified',equiv:null,cf:'Use manufacturer VOC response factor table',under:false,note:'PID instruments include response factor tables. Calibrate with isobutylene, apply appropriate RF to convert reading to target compound concentration.'}],
+    caut:[],
+    bad:[{gas:'Methane (CH₄)',reason:'CH₄ ionisation energy (12.6 eV) exceeds standard 10.6 eV lamp — NOT detected. Never use PID for CH₄ monitoring.'},{gas:'Ethane (C₂H₆)',reason:'Ionisation energy too high for standard 10.6 eV lamp. Not reliably detected.'},{gas:'Calibrating in high humidity without lamp compensation',reason:'Water vapour significantly attenuates UV light. Calibrate at similar humidity conditions to expected use.'}]},
+  eco2:{label:'Electrochemical — O₂ (Oxygen)',type:'Galvanic Cell or Polarographic Electrochemical Cell',
+    principle:'O₂ reduces at cathode; current proportional to O₂ partial pressure. Critical safety sensor — must be maintained and replaced on schedule. Cell life limited by chemical depletion (typically 1–3 years).',
+    warns:['⚠ O₂ cell has EXPIRY DATE — replace per date stamp regardless of apparent good readings.','⚠ Elevated CO₂ can slightly suppress O₂ readings in some cell types.','⚠ Never assume O₂ is safe without testing. N₂ inerting silently displaces O₂.'],
+    rec:[{gas:'Nitrogen (N₂) — for zero',conc:'0% O₂ (oxygen-free N₂)',equiv:null,cf:'1.0',note:'Use certified O₂-free N₂ for zero calibration. Set reading to 0.0% O₂.'},
+      {gas:'Clean fresh air — for span',conc:'20.9% O₂',equiv:null,cf:'1.0',note:'Fresh uncontaminated air (upwind, away from cargo) for span at 20.9% O₂. Some calibration labs use certified 20.9% O₂ cylinder for repeatability.'}],
+    ok:[{gas:'10% O₂ in N₂',conc:'10% O₂',equiv:null,cf:'1.0',under:false,note:'Optional mid-point check for linearity at oxygen-deficient levels. Set span at 10.0% after zeroing in N₂. Confirms sensor accuracy in the critical 10–19.5% O₂ range.'}],
+    caut:[{gas:'CO₂-rich atmosphere for zero',reason:'Some O₂ cell types may not zero correctly in CO₂ atmosphere. Prefer O₂-free N₂ for zero calibration.'}],
+    bad:[{gas:'Any HC gas',reason:'O₂ electrochemical cell does not respond to HC.'},{gas:'Contaminated air (with cargo gas, CO, etc.) for span',reason:'Presence of combustible or other gases in span air gives inaccurate O₂ reading. Use clean upwind fresh air only.'}]},
+  irco2:{label:'IR / NDIR — CO₂ (Carbon Dioxide)',type:'Non-Dispersive Infrared (NDIR)',
+    principle:'NDIR absorption at CO₂ wavelength (4.26 μm). Highly selective. Used for inert gas O₂/CO₂ monitoring, enclosed space CO₂ checks. Works in O₂-deficient atmospheres.',
+    warns:['✅ NDIR CO₂ sensors are highly selective — minimal interference from most common gases.','⚠ Water vapour (H₂O) has overlapping IR bands — use sensor with H₂O compensation in high humidity.'],
+    rec:[{gas:'CO₂ in N₂ or air',conc:'Per monitoring range: 1–2% vol for habitability check; 5–8% vol for inert gas monitoring',equiv:null,cf:'1.0',note:'Certified CO₂ reference gas. Zero with CO₂-free N₂ or clean air. Span at concentration appropriate to monitoring range.'}],
+    ok:[],
+    caut:[],
+    bad:[{gas:'Using raw inert gas as calibration gas',reason:'Inert gas (CO₂ + SO₂ + CO mixture) is not a certified reference material. Composition varies. Use only certified single-gas or certified mixed-gas reference standards.'}]}
+};
+
+// ══════════ PROCEDURES DATA ══════════
+const PROCS = {
+  bump:{title:'Bump Test (Pre-Use Functional Check)',colour:'var(--amber)',desc:'A bump test verifies the sensor RESPONDS to target gas and alarms ACTIVATE. It is NOT a calibration. Perform before every entry into a confined space or hazardous area.',
+    items:['<strong>Location:</strong> Perform in clean air — upwind of cargo, exhaust, and storage areas','<strong>Check battery:</strong> Adequate charge for the full duration of the task','<strong>Check calibration date:</strong> Must be current and within interval per SMS/manufacturer','<strong>Check calibration gas:</strong> Correct gas, correct concentration, within expiry, certificate present','<strong>Verify zero:</strong> Instrument reads zero / 20.9% O₂ in clean fresh air before applying gas','<strong>Apply gas:</strong> Connect adaptor to sensor inlet. Apply at 0.5–1.0 L/min or per manufacturer','<strong>Verify response:</strong> Reading rises toward calibration gas concentration — must respond within 30 sec','<strong>Verify alarms:</strong> Audible alarm, visible alarm, and vibration (if fitted) activate at set threshold','<strong>Verify recovery:</strong> Remove gas — reading returns to zero / clean air baseline','<strong>Record:</strong> Log date, time, instrument ID, gas used (type + lot number), result (pass/fail)','<strong>Fail action:</strong> Do NOT use in atmosphere if bump test fails — remove from service for full calibration or repair']},
+  zero:{title:'Zero Calibration Procedure',colour:'var(--cyan)',desc:'Sets the baseline reading. Method depends on sensor type: pellistors need fresh air; O₂ and IR sensors use N₂.',
+    items:['<strong>Location:</strong> Upwind of all cargo, exhaust, paint storage, and chemical locker','<strong>Pellistor/HC:</strong> Zero ONLY in clean FRESH AIR — never in N₂ or CO₂ (will damage catalyst)','<strong>O₂ sensor:</strong> Zero using certified O₂-free N₂ gas','<strong>IR/NDIR sensors:</strong> Zero with N₂ or certified zero gas per manufacturer specification','<strong>Power on:</strong> Allow instrument full warm-up — 2–5 min (pellistor), up to 30 min (some IR/EC types)','<strong>Stabilise:</strong> Wait until reading is completely stable (not drifting) before applying zero command','<strong>Execute zero:</strong> Press zero button or activate zero calibration mode per instrument procedure','<strong>Verify result:</strong> Reading shows 0.0% LEL, 0 ppm, or 20.9% O₂ as appropriate','<strong>Drift check:</strong> If reading immediately drifts back — atmosphere is contaminated or sensor damaged. Investigate.']},
+  span:{title:'Span Calibration Procedure',colour:'var(--green)',desc:'Sets instrument sensitivity using certified reference gas. Always complete zero calibration first.',
+    items:['<strong>Prerequisite:</strong> Zero calibration completed and confirmed stable','<strong>Verify gas:</strong> Correct gas type, concentration matches instrument requirement, within expiry','<strong>Verify certificate:</strong> NIST-traceable or national standard certificate present. Not expired.','<strong>Cylinder pressure:</strong> Adequate pressure remaining (check regulator, usually >20 bar remaining)','<strong>Connect:</strong> Correct adaptor or calibration cup firmly attached to sensor inlet','<strong>Set flow:</strong> Regulator flow set to manufacturer specification (typically 0.5–1.0 L/min for portable)','<strong>Apply gas:</strong> Open valve slowly. Allow reading to rise and FULLY STABILISE (30–90 seconds)','<strong>Wait for stability:</strong> Do NOT adjust until reading is completely stable (no longer rising)','<strong>Adjust span:</strong> Set instrument display to match calibration gas concentration','<strong>CF note:</strong> If using surrogate calibration gas — apply manufacturer CF BEFORE adjusting','<strong>Remove gas:</strong> Close valve, remove adaptor, verify reading returns to zero in clean air','<strong>Record:</strong> Pre-cal reading, post-cal reading, calibration gas (type, lot, cert number, expiry)']},
+  full:{title:'Full Calibration Procedure (Zero + Span + Verify)',colour:'var(--purple)',desc:'Complete scheduled calibration. Required at SMS-defined intervals, after sensor replacement, after any high-concentration exposure, or following suspect readings.',
+    items:['<strong>Pre-inspection:</strong> Inspect instrument physically — housing damage, sensor condition, connector integrity, display','<strong>Battery:</strong> Fully charged or fresh batteries. Note: low battery can cause false readings.','<strong>Documents:</strong> Check last calibration date in logbook. Confirm calibration interval is due.','<strong>Gather equipment:</strong> All required calibration gas cylinders, appropriate adaptors, flow regulator, clean cloth, logbook','<strong>Verify all gas bottles:</strong> Each bottle — correct gas, concentration label, expiry date, reference certificate','<strong>Select location:</strong> Clean air, upwind, away from cargo, exhaust, paint lockers, welding','<strong>Power on + warm-up:</strong> Full warm-up per manufacturer specification before starting any calibration','<strong>Execute ZERO:</strong> Complete zero calibration procedure (see Zero Cal tab)','<strong>Confirm zero stable:</strong> Do not proceed until zero reading is completely stable','<strong>Execute SPAN:</strong> Complete span calibration procedure (see Span Cal tab)','<strong>Multi-gas instrument:</strong> Complete span for EACH sensor channel individually','<strong>Verify linearity (optional):</strong> Apply second known concentration — confirm reading within ±5%','<strong>Verify ALARMS:</strong> Confirm all alarm setpoints activate at correct levels (audible, visual, relay)','<strong>Affix label:</strong> Calibration label with date, next due date, technician initials','<strong>Complete record:</strong> Full calibration log entry (see Record Log tab)','<strong>Store instrument:</strong> Powered, charged, in protective case. Ready for deployment.']},
+  log:{title:'Calibration Record Requirements',colour:'var(--muted)',desc:'Every calibration event is a legal/SMS record. The following fields are required. Incomplete records are non-conformances under ISM and SIRE 2.0.',
+    items:['<strong>Instrument details:</strong> Make, Model, Serial Number, Ship\'s Tag / Asset ID','<strong>Date and time:</strong> Exact date and time of calibration completion','<strong>Location:</strong> Where performed (e.g., "Main deck fwd, upwind")','<strong>Calibration gas — Zero:</strong> Gas type, % concentration, cylinder serial or lot number, expiry date','<strong>Calibration gas — Span:</strong> Same details as above for span gas','<strong>Pre-calibration readings:</strong> What instrument READ before any adjustment','<strong>Post-calibration readings:</strong> What instrument reads AFTER calibration','<strong>Correction Factor used:</strong> CF value and reference document (if surrogate cal gas used)','<strong>Alarm test result:</strong> Alarm levels tested, setpoints confirmed, pass/fail','<strong>Overall result:</strong> PASS or FAIL. If FAIL — reason and action taken.','<strong>Technician:</strong> Full name, rank/position, signature','<strong>Next due date:</strong> Date of next calibration per SMS/manufacturer interval','<strong>Supervisor sign-off:</strong> Chief Officer or Safety Officer counter-signature']}
+};
+
+// ══════════ STORAGE (graceful) ══════════
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+
+// ══════════ INFO MODAL ══════════
+function openInfo(key){
+  const g=GLOSSARY[key]; if(!g)return;
+  document.getElementById('mAbbr').textContent=key.replace('LEL50','50% LEL').replace('MGM3','mg/m³');
+  document.getElementById('mFull').textContent=g.full;
+  document.getElementById('mDesc').textContent=g.desc;
+  document.getElementById('mMeta').textContent=g.meta?('ℹ '+g.meta+'  ·  Category: '+g.cat):('Category: '+g.cat);
+  document.getElementById('modalBg').classList.add('show');
+}
+function closeInfo(){document.getElementById('modalBg').classList.remove('show')}
+
+// ══════════ SENSOR GUIDE ══════════
+function renderSensor(){
+  const key=document.getElementById('senSel').value, out=document.getElementById('sensorOut');
+  if(!key){out.innerHTML=`<div style="text-align:center;padding:42px 20px;color:var(--dim)"><div style="font-size:40px;margin-bottom:10px;filter:grayscale(1)">🔬</div><div>Select a sensor type above</div></div>`;return;}
+  const d=SENS[key]; if(!d){out.innerHTML='<div class="ib danger"><span>❌</span><div>No data for this sensor.</div></div>';return;}
+  let h=`<div class="snote"><strong>${d.label}</strong>${d.principle}</div>`;
+  if(d.warns&&d.warns.length){h+=`<div class="card" style="margin-bottom:12px"><div class="sub" style="margin-top:0">⚠ Critical Operating Warnings</div>`;
+    d.warns.forEach(w=>{h+=`<div style="font-size:.78rem;padding:7px 10px;margin-bottom:3px;border-radius:5px;background:rgba(245,158,11,.05);border-left:2px solid var(--amber);color:var(--txt)">${w}</div>`;});h+=`</div>`;}
+  h+=`<div class="sub">✅ Recommended Calibration Gas</div>`;
+  d.rec.forEach(r=>{h+=`<div class="cc best"><div class="cc-hd"><div class="cc-name">${r.gas}</div><span class="tag tg">✅ RECOMMENDED</span></div>
+    <div class="cc-row">📦 <strong>Bottle concentration:</strong>&nbsp;${r.conc}</div>
+    <div class="cc-row">⚖️ <strong>Correction Factor <span class="info-badge" data-i="CF">i</span>:</strong>&nbsp;${r.cf}</div>
+    <div class="cc-note">${r.note}</div></div>`;});
+  if(d.ok&&d.ok.length){h+=`<div class="sub">🟡 Acceptable Alternatives (Correction Factor Required)</div>`;
+    d.ok.forEach(r=>{h+=`<div class="cc ok"><div class="cc-hd"><div class="cc-name">${r.gas}</div><span class="tag ty">🟡 ACCEPTABLE + CF</span></div>
+      <div class="cc-row">📦 <strong>Bottle concentration:</strong>&nbsp;${r.conc}</div>
+      ${r.equiv?`<div class="cc-row">🔄 <strong>Equivalent on target LEL scale:</strong>&nbsp;<span class="cc-equiv">${r.equiv}</span></div>`:''}
+      <div class="cc-row">⚖️ <strong>Correction Factor:</strong>&nbsp;${r.cf}</div>
+      ${r.under?`<span class="warn-badge">⚠ Sensor UNDERREADS target gas — CF is mandatory, not optional</span>`:''}
+      <div class="cc-note">${r.note}</div></div>`;});}
+  if(d.caut&&d.caut.length){h+=`<div class="sub">⚠ Use With Extreme Caution</div>`;
+    d.caut.forEach(r=>{h+=`<div class="cc warn"><div class="cc-hd"><div class="cc-name">${r.gas}</div><span class="tag to">⚠ CAUTION</span></div><div class="cc-note">${r.reason}</div></div>`;});}
+  if(d.bad&&d.bad.length){h+=`<div class="sub">❌ Do NOT Use</div>`;
+    d.bad.forEach(r=>{h+=`<div class="cc bad"><div class="cc-hd"><div class="cc-name" style="color:var(--red)">${r.gas}</div><span class="tag tr">❌ PROHIBITED</span></div><div class="cc-note">${r.reason}</div></div>`;});}
+  out.innerHTML=h;
+}
+
+// ══════════ GAS LIBRARY ══════════
+let catFilter='ALL';
+function setCat(c,btn){catFilter=c;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderGasLib();}
+function renderGasLib(){
+  const q=(document.getElementById('gsearch').value||'').toLowerCase();
+  const tbody=document.getElementById('gasBody');
+  const filtered=GAS.filter(g=>{
+    const ms=!q||g.name.toLowerCase().includes(q)||g.f.toLowerCase().replace(/[₀-₉]/g,s=>String.fromCharCode(s.charCodeAt(0)-8272)).includes(q)||g.id.includes(q);
+    const mc=catFilter==='ALL'||g.cat===catFilter; return ms&&mc;});
+  tbody.innerHTML=filtered.map(g=>{
+    const lel50=g.lel?(g.lel*0.5).toFixed(3):'—';
+    const catCls=({HC:'hc',Aromatic:'arom',Toxic:'tox',Spec:'spec',Asph:'asph',Chem:'chem',Unsat:'unsat'})[g.cat]||'hc';
+    const catLbl=({HC:'Aliphatic',Aromatic:'Aromatic',Unsat:'Unsaturated',Toxic:'Toxic',Spec:'Special',Asph:'Asphyxiant',Chem:'Chemical'})[g.cat]||g.cat;
+    const twaN=parseFloat(g.twa);
+    const twaCls=!isNaN(twaN)&&g.twa.includes('ppm')?(twaN<1?'vd':twaN<10?'vw':twaN<50?'vy':'vn'):'vm';
+    const vdSym=g.vd>1.2?'↓':g.vd<0.8?'↑':'≈', vdCls=g.vd>1.2?'vw':'vm';
+    const uelStr=g.uel===100?`<span class="vd">100 ⚠</span>`:g.uel?g.uel.toFixed(1):'<span class="vm">—</span>';
+    return `<tr>
+      <td style="font-weight:600;white-space:nowrap">${g.name}</td>
+      <td><span class="mono">${g.f}</span></td>
+      <td><span class="cb ${catCls}">${catLbl}</span></td>
+      <td class="vn">${g.lel?g.lel.toFixed(2):'<span class="vm">—</span>'}</td>
+      <td class="vn">${uelStr}</td>
+      <td class="vn vs">${lel50}</td>
+      <td class="vn">${g.mw.toFixed(2)}</td>
+      <td class="vn ${vdCls}">${g.vd.toFixed(2)}${vdSym}</td>
+      <td class="${twaCls}">${g.twa}</td>
+      <td class="vn">${g.stel||'<span class="vm">—</span>'}</td>
+      <td class="vn">${g.idlh}</td>
+      <td><span class="tag tc" style="font-size:.6rem">${g.unit}</span></td>
+      <td style="font-size:.73rem;color:var(--muted);min-width:200px;max-width:300px">${g.note}</td></tr>`;}).join('');
+}
+
+// ══════════ CONVERTER: reference tables + selectors ══════════
+function populateLELSel(){
+  const sel=document.getElementById('lelGas');
+  const hc=GAS.filter(g=>g.lel!==null&&g.lel!==undefined);
+  sel.innerHTML='<option value="">— Select gas —</option>'+hc.map(g=>`<option value="${g.id}">${g.name} (${g.f}) — LEL ${g.lel}% vol</option>`).join('');
+}
+function populatePPMSel(){
+  const sel=document.getElementById('ppmGasSel');
+  sel.innerHTML='<option value="">— optional: pick a gas —</option>'+GAS.map(g=>`<option value="${g.id}">${g.name} (${g.f}) — MW ${g.mw}</option>`).join('');
+}
+function ppmPickGas(){
+  const g=GAS.find(x=>x.id===document.getElementById('ppmGasSel').value);
+  if(g){document.getElementById('pMW').value=g.mw;fromPPM();}
+}
+function renderLELRef(){
+  const ids=['ch4','c3h8','nc4','ic4','nc5','ic5','h2','c2h4','c2h2'];
+  document.getElementById('lelRef').innerHTML=GAS.filter(g=>ids.includes(g.id)).map(g=>`<tr>
+    <td style="font-weight:600">${g.name} <span class="mono" style="font-size:.72rem">${g.f}</span></td>
+    <td class="vn">${g.lel.toFixed(2)}</td>
+    <td class="vn">${g.uel===100?'<span class="vd">100 ⚠</span>':g.uel.toFixed(1)}</td>
+    <td class="vn vy">${(g.lel*0.25).toFixed(3)}</td>
+    <td class="vn vs">${(g.lel*0.50).toFixed(3)}</td>
+    <td class="vn vd">${g.lel.toFixed(3)}</td></tr>`).join('');
+}
+function renderPPMRef(){
+  const tox=GAS.filter(g=>['h2s','co','so2','nh3','bzn','tol','xyl','nc6','co2'].includes(g.id));
+  const mv=22.414*298.15/273.15;
+  document.getElementById('ppmRef').innerHTML=tox.map(g=>{
+    const twaN=parseFloat(g.twa);
+    const twaMg=!isNaN(twaN)&&g.twa.includes('ppm')?(twaN*g.mw/mv).toFixed(3):'—';
+    const twaVol=!isNaN(twaN)&&g.twa.includes('ppm')?(twaN/10000).toFixed(7):'—';
+    const idlhN=parseFloat(g.idlh);
+    const idlhMg=!isNaN(idlhN)&&g.idlh.includes('ppm')?(idlhN*g.mw/mv).toFixed(1):'—';
+    const tc=!isNaN(twaN)?(twaN<1?'vd':twaN<10?'vw':twaN<50?'vy':''):'';
+    return `<tr><td style="font-weight:600">${g.name} <span class="mono" style="font-size:.72rem">${g.f}</span></td>
+      <td class="vn">${g.mw.toFixed(2)}</td><td class="vn ${tc}">${g.twa}</td>
+      <td class="vm" style="font-size:.73rem">${twaVol}</td><td class="vm" style="font-size:.73rem">${twaMg}</td>
+      <td class="vn">${g.idlh}</td><td class="vm" style="font-size:.73rem">${idlhMg}</td></tr>`;}).join('');
+}
+function renderFlowTbl(){
+  const flows=[0.25,0.5,0.75,1.0,1.25,1.5,1.75,2.0,2.5,3.0], t=25;
+  document.getElementById('flowTbl').innerHTML=flows.map(f=>{
+    const nlpm=f*273.15/(273.15+t);          // Normal litre (0 °C)
+    const slpm=f*293.15/(273.15+t);          // Standard litre (20 °C) — corrected formula
+    return `<tr><td class="vn" style="color:var(--cyan);font-weight:700">${f.toFixed(2)}</td>
+      <td class="vn">${(f*60).toFixed(1)}</td><td class="vn">${(f*1000).toFixed(0)}</td>
+      <td class="vn">${nlpm.toFixed(4)}</td><td class="vn">${(nlpm*60).toFixed(3)}</td>
+      <td class="vn">${slpm.toFixed(4)}</td></tr>`;}).join('');
+}
+
+// ══════════ LEL CONVERTER ══════════
+function clrLEL(){document.getElementById('lelIn').value='';document.getElementById('volIn').value='';document.getElementById('lelRes').style.display='none';}
+function fromLEL(){
+  const lp=parseFloat(document.getElementById('lelIn').value), g=GAS.find(x=>x.id===document.getElementById('lelGas').value);
+  if(!g||isNaN(lp)){document.getElementById('lelRes').style.display='none';return;}
+  const vp=lp/100*g.lel; document.getElementById('volIn').value=vp.toFixed(5); showLEL(g,lp,vp);
+}
+function fromVol(){
+  const vp=parseFloat(document.getElementById('volIn').value), g=GAS.find(x=>x.id===document.getElementById('lelGas').value);
+  if(!g||isNaN(vp)){document.getElementById('lelRes').style.display='none';return;}
+  const lp=vp/g.lel*100; document.getElementById('lelIn').value=lp.toFixed(3); showLEL(g,lp,vp);
+}
+function showLEL(g,lp,vp){
+  const r=document.getElementById('lelRes'); r.style.display='block';
+  const rc=lp<10?'vs':lp<40?'vy':lp<75?'vw':'vd glow-r';
+  const rl=lp<10?'SAFE RANGE':lp<25?'CAUTION':lp<50?'WARNING':lp<75?'DANGER':'EXTREME DANGER';
+  const uelPct=g.uel?(vp/g.uel*100).toFixed(2):'N/A';
+  document.getElementById('lelGrid').innerHTML=`
+    <div class="citem"><div class="ci-lbl">%LEL</div><div class="ci-val ${rc}">${lp.toFixed(2)}</div><div class="ci-unit">of LEL (${g.lel}% vol)</div></div>
+    <div class="citem"><div class="ci-lbl">%vol</div><div class="ci-val">${vp.toFixed(5)}</div><div class="ci-unit">% by volume</div></div>
+    <div class="citem"><div class="ci-lbl">ppm (vol)</div><div class="ci-val">${(vp*10000).toFixed(0)}</div><div class="ci-unit">parts per million</div></div>
+    <div class="citem"><div class="ci-lbl">%UEL</div><div class="ci-val">${uelPct}</div><div class="ci-unit">of UEL (${g.uel}% vol)</div></div>
+    <div class="citem" style="background:rgba(239,68,68,.08)"><div class="ci-lbl">Risk Level</div><div class="ci-val ${rc}" style="font-size:.8rem">${rl}</div><div class="ci-unit">${g.name}</div></div>`;
+}
+
+// ══════════ PPM CONVERTER ══════════
+function getMV(){const t=parseFloat(document.getElementById('pTemp').value)||25;return 22.414*(273.15+t)/273.15;}
+function showPPM(ppm,vol,mgm3,mw,t){
+  document.getElementById('ppmRes').style.display='block';
+  document.getElementById('ppmGrid').innerHTML=`
+    <div class="citem"><div class="ci-lbl">ppm (vol/vol)</div><div class="ci-val">${ppm.toFixed(3)}</div><div class="ci-unit">parts per million</div></div>
+    <div class="citem"><div class="ci-lbl">%vol</div><div class="ci-val">${vol.toFixed(7)}</div><div class="ci-unit">% by volume</div></div>
+    <div class="citem"><div class="ci-lbl">ppb</div><div class="ci-val">${(ppm*1000).toFixed(1)}</div><div class="ci-unit">parts per billion</div></div>
+    ${mgm3!==null&&!isNaN(mgm3)?`<div class="citem"><div class="ci-lbl">mg/m³</div><div class="ci-val">${mgm3.toFixed(4)}</div><div class="ci-unit">at ${t}°C, 101.3 kPa</div></div>
+    <div class="citem"><div class="ci-lbl">μg/m³</div><div class="ci-val">${(mgm3*1000).toFixed(1)}</div><div class="ci-unit">micrograms/m³</div></div>`:''}`;
+}
+function fromPPM(){
+  const ppm=parseFloat(document.getElementById('pIn').value), mw=parseFloat(document.getElementById('pMW').value), t=parseFloat(document.getElementById('pTemp').value)||25;
+  if(isNaN(ppm)){document.getElementById('ppmRes').style.display='none';return;}
+  const vol=ppm/10000; document.getElementById('pvIn').value=vol.toFixed(7);
+  let mgm3=null; if(!isNaN(mw)){mgm3=ppm*mw/getMV();document.getElementById('mgIn').value=mgm3.toFixed(4);} showPPM(ppm,vol,mgm3,mw,t);
+}
+function fromPVol(){
+  const vol=parseFloat(document.getElementById('pvIn').value); if(isNaN(vol)){document.getElementById('ppmRes').style.display='none';return;}
+  const ppm=vol*10000, mw=parseFloat(document.getElementById('pMW').value), t=parseFloat(document.getElementById('pTemp').value)||25;
+  document.getElementById('pIn').value=ppm.toFixed(4);
+  let mgm3=null; if(!isNaN(mw)){mgm3=ppm*mw/getMV();document.getElementById('mgIn').value=mgm3.toFixed(4);} showPPM(ppm,vol,mgm3,mw,t);
+}
+function fromMG(){
+  const mg=parseFloat(document.getElementById('mgIn').value), mw=parseFloat(document.getElementById('pMW').value), t=parseFloat(document.getElementById('pTemp').value)||25;
+  if(isNaN(mg)||isNaN(mw)){document.getElementById('ppmRes').style.display='none';return;}
+  const ppm=mg*getMV()/mw, vol=ppm/10000;
+  document.getElementById('pIn').value=ppm.toFixed(4); document.getElementById('pvIn').value=vol.toFixed(7); showPPM(ppm,vol,mg,mw,t);
+}
+
+// ══════════ FLOW CONVERTER ══════════
+function calcFlow(){
+  const f=parseFloat(document.getElementById('fLpm').value), t=parseFloat(document.getElementById('fTemp').value)||25, rd=document.getElementById('flowRes');
+  if(isNaN(f)){rd.innerHTML='<div style="color:var(--dim);font-size:.8rem;text-align:center">Enter flow rate →</div>';return;}
+  const nlpm=f*273.15/(273.15+t);     // Normal litre (0 °C)
+  const slpm=f*293.15/(273.15+t);     // Standard litre (20 °C) — corrected formula
+  rd.innerHTML=`<div class="crgrid" style="width:100%">
+    <div class="citem"><div class="ci-lbl">L/hr</div><div class="ci-val">${(f*60).toFixed(2)}</div><div class="ci-unit">Litres/hour</div></div>
+    <div class="citem"><div class="ci-lbl">mL/min</div><div class="ci-val">${(f*1000).toFixed(0)}</div><div class="ci-unit">mL/min</div></div>
+    <div class="citem"><div class="ci-lbl">NL/min (0°C)</div><div class="ci-val">${nlpm.toFixed(4)}</div><div class="ci-unit">Normal L/min</div></div>
+    <div class="citem"><div class="ci-lbl">NL/hr (0°C)</div><div class="ci-val">${(nlpm*60).toFixed(3)}</div><div class="ci-unit">Normal L/hr</div></div>
+    <div class="citem"><div class="ci-lbl">SL/min (20°C)</div><div class="ci-val">${slpm.toFixed(4)}</div><div class="ci-unit">Standard L/min ISO</div></div></div>`;
+}
+
+// ══════════ REGULATIONS ══════════
+function renderRegs(){
+  const o2=[
+    {rng:'>23.5%',lbl:'OXYGEN ENRICHED',cls:'vd',bg:'rgba(239,68,68,.08)',desc:'Fire and explosion risk. Do NOT ignite or spark. Evacuate. Investigate O₂ supply or oxidising agent source.'},
+    {rng:'20.9%',lbl:'NORMAL ATMOSPHERE',cls:'vs',bg:'rgba(16,185,129,.08)',desc:'Standard atmospheric O₂. Reference value.'},
+    {rng:'20.0–20.9%',lbl:'BORDERLINE — INVESTIGATE',cls:'vy',bg:'rgba(245,158,11,.05)',desc:'Minimum acceptable (ISGOTT: 20.0%). Investigate ventilation. Do not work alone.'},
+    {rng:'19.5–20.0%',lbl:'OXYGEN DEFICIENT',cls:'vw',bg:'rgba(249,115,22,.08)',desc:'OSHA deficient atmosphere. SCBA mandatory for entry. Alarm condition on most instruments.'},
+    {rng:'16–19.5%',lbl:'DANGER',cls:'vd',bg:'rgba(239,68,68,.08)',desc:'Impaired judgment, rapid heartbeat, reduced coordination. SCBA mandatory. No entry.'},
+    {rng:'12–16%',lbl:'SEVERE DANGER',cls:'vd',bg:'rgba(239,68,68,.12)',desc:'Loss of consciousness likely. Immediate evacuation and rescue response.'},
+    {rng:'< 12%',lbl:'FATAL — EMERGENCY',cls:'vd',bg:'rgba(239,68,68,.18)',desc:'Death within minutes. Do NOT enter under any circumstances. Full emergency response.'},
+    {rng:'≤ 8% (inert gas)',lbl:'INERT GAS STANDARD',cls:'',bg:'rgba(139,92,246,.08)',col:'var(--purple)',desc:'SOLAS/MARPOL: O₂ in cargo tank inert atmosphere must be ≤ 8% vol at all times. Fixed sensor required.'}];
+  const alvColor=l=>l.col?'color:'+l.col:l.cls==='vs'?'color:var(--green)':l.cls==='vd'?'color:var(--red)':l.cls==='vw'?'color:var(--orange)':l.cls==='vy'?'color:var(--amber)':'';
+  document.getElementById('o2Levels').innerHTML=o2.map(l=>`<div class="alevel" style="background:${l.bg}">
+    <span class="alv ${l.cls}" style="${l.col?'color:'+l.col:''}">${l.rng}</span>
+    <span class="als" style="${alvColor(l)}">${l.lbl}</span><span class="ald">${l.desc}</span></div>`).join('');
+
+  const lel=[
+    {rng:'0–10% LEL',lbl:'NORMAL / SAFE',cls:'vs',bg:'rgba(16,185,129,.06)',desc:'Normal monitoring. Continue work. Document readings.'},
+    {rng:'< 1% LEL',lbl:'HOT WORK / ENTRY LIMIT',cls:'',bg:'rgba(0,212,255,.06)',col:'var(--cyan)',desc:'ISGOTT: HC must be < 1% LEL for hot work and gas-free certificate issuance. Continuous monitoring required during hot work.'},
+    {rng:'10% LEL',lbl:'LOW ALARM (Caution)',cls:'vy',bg:'rgba(245,158,11,.06)',desc:'Low alarm on most fixed detectors. Increase ventilation. Identify source. Alert OOW/bridge.'},
+    {rng:'20–25% LEL',lbl:'HIGH ALARM',cls:'vw',bg:'rgba(249,115,22,.08)',desc:'High alarm. STOP all ignition sources immediately. Maximum ventilation. Alert Master.'},
+    {rng:'40% LEL',lbl:'EVACUATE',cls:'vd',bg:'rgba(239,68,68,.08)',desc:'Evacuate all personnel from the space. No entry without SCBA. Emergency response activated.'},
+    {rng:'60–75% LEL',lbl:'EXTREME DANGER',cls:'vd',bg:'rgba(239,68,68,.12)',desc:'Immediately dangerous. No personnel in vicinity. Full emergency. All ignition sources isolated.'},
+    {rng:'100% LEL',lbl:'AT LOWER EXPLOSIVE LIMIT',cls:'vd',bg:'rgba(239,68,68,.18)',desc:'Gas concentration IS the LEL — explosion/fire with any ignition source. Maximum emergency response.'}];
+  document.getElementById('lelLevels').innerHTML=lel.map(l=>`<div class="alevel" style="background:${l.bg}">
+    <span class="alv ${l.cls}" style="${l.col?'color:'+l.col:''}">${l.rng}</span>
+    <span class="als" style="${alvColor(l)}">${l.lbl}</span><span class="ald">${l.desc}</span></div>`).join('');
+
+  const tox=[
+    {g:'H₂S',twa:'1 ppm',stel:'5 ppm',idlh:'50 ppm',alarm:'5–10 ppm',rem:'Olfactory paralysis >100 ppm. Heavier than air — bilges, pits. Most lethal gas on crude tankers.'},
+    {g:'CO',twa:'25 ppm',stel:'100 ppm',idlh:'1200 ppm',alarm:'25–35 ppm',rem:'Inert gas by-product. Binds Hb 200× more than O₂. Colourless, odourless. Cumulative.'},
+    {g:'SO₂',twa:'0.25 ppm',stel:'0.5 ppm',idlh:'100 ppm',alarm:'0.5–1 ppm',rem:'Inert gas from HFO combustion. Extremely low TLV. Respiratory sensitiser. VD 2.21.'},
+    {g:'NH₃',twa:'25 ppm',stel:'35 ppm',idlh:'300 ppm',alarm:'25–50 ppm',rem:'Refrigeration. Odour detectable <1 ppm. Lighter than air. Eye and airway burns.'},
+    {g:'Benzene',twa:'0.5 ppm',stel:'2.5 ppm',idlh:'500 ppm',alarm:'0.5–1 ppm (PID)',rem:'⚠ CARCINOGEN. Crude oil. Pellistor cannot detect at TLV. Must use PID. No safe level.'},
+    {g:'CO₂',twa:'5000 ppm',stel:'30000 ppm',idlh:'40000 ppm',alarm:'0.5% vol',rem:'Inert gas, CO₂ flooding. Heavier than air. IDLH = 4% vol. Asphyxiant + direct toxin.'},
+    {g:'Toluene',twa:'20 ppm',stel:'—',idlh:'500 ppm',alarm:'Per cargo HSE plan',rem:'Chemical tanker cargo. Neurotoxin. CNS depressant. PID recommended.'},
+    {g:'VCM',twa:'1 ppm',stel:'—',idlh:'NIOSH: cancer risk',alarm:'Per cargo plan (PID)',rem:'⚠ CARCINOGEN. Chemical tanker. POISONS pellistor. PID or dedicated IR only.'}];
+  document.getElementById('toxTbl').innerHTML=tox.map(g=>{
+    const tv=parseFloat(g.twa), tc=!isNaN(tv)?(tv<1?'vd':tv<10?'vw':tv<50?'vy':'vn'):'';
+    return `<tr><td style="font-weight:600">${g.g}</td><td class="vn ${tc}">${g.twa}</td><td class="vn">${g.stel}</td>
+      <td class="vn">${g.idlh}</td><td style="color:var(--amber);font-size:.78rem">${g.alarm}</td>
+      <td style="font-size:.73rem;color:var(--muted)">${g.rem}</td></tr>`;}).join('');
+
+  document.getElementById('entryReqs').innerHTML=`
+  <div class="ib warn"><span class="ib-ico">⚠️</span><div class="ib-body"><strong>Reference: ISGOTT 6th Edition, Chapter 7 / IMO MSC.1/Circ.1401</strong>These are minimum requirements. Vessel SMS and flag state regulations may specify stricter limits.</div></div>
+  <div class="tw"><table><thead><tr><th>Parameter</th><th>Minimum Requirement</th><th>Hot Work Requirement</th><th>Source</th></tr></thead><tbody>
+    <tr><td><strong>Oxygen (O₂)</strong></td><td style="color:var(--green)">≥ 20.0% vol</td><td style="color:var(--green)">20.9% (atmospheric)</td><td>ISGOTT Ch.7</td></tr>
+    <tr><td><strong>Flammable Gas (HC)</strong></td><td style="color:var(--green)">< 1% LEL (gas-free)</td><td style="color:var(--red)">< 1% LEL in work space AND all adjacent spaces</td><td>ISGOTT / SOLAS II-2</td></tr>
+    <tr><td><strong>H₂S</strong></td><td style="color:var(--amber)">< 10 ppm (some SMS: TLV = 1 ppm)</td><td style="color:var(--amber)">< 1 ppm (TLV-TWA)</td><td>ACGIH TLV / ISGOTT</td></tr>
+    <tr><td><strong>CO</strong></td><td style="color:var(--amber)">< 25 ppm (TLV-TWA)</td><td style="color:var(--amber)">< 25 ppm</td><td>ACGIH TLV</td></tr>
+    <tr><td><strong>SO₂</strong></td><td style="color:var(--amber)">< 0.25 ppm (TLV-TWA)</td><td style="color:var(--amber)">< 0.25 ppm</td><td>ACGIH TLV</td></tr>
+    <tr><td><strong>Benzene</strong></td><td style="color:var(--red)">< 0.5 ppm (TLV-TWA)</td><td style="color:var(--red)">< 0.5 ppm (PID required)</td><td>ACGIH TLV / MARPOL</td></tr>
+    <tr><td><strong>CO₂</strong></td><td style="color:var(--amber)">< 5000 ppm (TLV-TWA)</td><td style="color:var(--amber)">< 5000 ppm</td><td>ACGIH TLV</td></tr>
+    <tr><td><strong>Monitoring</strong></td><td colspan="2" style="color:var(--muted)">Continuous monitoring required during entry. Gas detector carried by entrant. Standby person with rescue equipment at entrance.</td><td>IMO A.1050</td></tr>
+  </tbody></table></div>`;
+
+  document.getElementById('solasReqs').innerHTML=`<div class="tw"><table>
+  <thead><tr><th>Regulation</th><th>Requirement</th><th>Applicable To</th></tr></thead><tbody>
+    <tr><td><strong>SOLAS II-2, Reg 4.5.9</strong></td><td>Fixed flammable gas detection with alarms at bridge and cargo control room</td><td>Tankers > 500 GT</td></tr>
+    <tr><td><strong>SOLAS II-2, Reg 16</strong></td><td>Fixed gas detection in cargo pump rooms and enclosed spaces forward of cargo area</td><td>Oil tankers</td></tr>
+    <tr><td><strong>MARPOL Annex I, Reg 32</strong></td><td>Inert gas system required. O₂ in IG supplied to tanks ≤ 5% vol. Continuous O₂ monitoring of IG main.</td><td>Crude/product tankers > 20,000 DWT</td></tr>
+    <tr><td><strong>SOLAS II-2, Reg 11.6</strong></td><td>Continuous monitoring of O₂ content in inert gas main. Automatic shutdown if O₂ > 8%.</td><td>Tankers with IG systems</td></tr>
+    <tr><td><strong>IGC Code, Chapter 13</strong></td><td>Fixed gas detection for cargo machinery, compressor rooms, ESD systems. Species-specific for cargo gas.</td><td>Gas carriers (LNG, LPG)</td></tr>
+    <tr><td><strong>IBC Code, Chapter 13</strong></td><td>Cargo tank atmosphere control, vapour detection requirements per individual chemical cargo</td><td>Chemical tankers</td></tr>
+    <tr><td><strong>IMO MSC.1/Circ.1401</strong></td><td>Revised recommendations for enclosed space entry: O₂ ≥ 20%, HC < 1% LEL, toxic gases within TLV, standby person, rescue equipment at entrance</td><td>All vessels (ISM compliance)</td></tr>
+    <tr><td><strong>ISM Code, Section 7</strong></td><td>Emergency response plans including gas emergencies. Gas detection equipment maintenance procedures in SMS. Calibration records maintained.</td><td>All ISM-certified vessels</td></tr>
+    <tr><td><strong>SIRE 2.0 / VIQ</strong></td><td>Calibration records must be current. Cal gas certificates available. Bump test log maintained. Instruments within calibration interval.</td><td>OCIMF inspections</td></tr>
+  </tbody></table></div>`;
+}
+
+// ══════════ PROCEDURES (with progress + persistence) ══════════
+function clState(k){try{return JSON.parse(lsGet('mgc_cl_'+k)||'[]')}catch(e){return[]}}
+function clSave(k,arr){lsSet('mgc_cl_'+k,JSON.stringify(arr));}
+function renderProcs(){
+  Object.keys(PROCS).forEach(key=>{
+    const p=PROCS[key], div=document.getElementById('proc-'+key); if(!div)return;
+    const done=clState(key);
+    div.innerHTML=`
+    <div class="ib tip"><span class="ib-ico">📋</span><div class="ib-body"><strong style="color:${p.colour}">${p.title}</strong>${p.desc}</div></div>
+    <div class="clprog"><i id="pg-${key}"></i></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:.7rem;color:var(--dim)" id="pct-${key}">Tap items to mark complete</span>
+      <button class="btn-reset" onclick="resetCL('${key}')">Reset All</button></div>
+    <div id="cl-${key}">${p.items.map((item,i)=>`
+      <div class="cli ${done.includes(i)?'done':''}" id="ci-${key}-${i}" onclick="toggleCL('${key}',${i})">
+        <div class="clb" id="cb-${key}-${i}">${done.includes(i)?'✓':''}</div><div class="clt">${item}</div></div>`).join('')}</div>`;
+    updateProg(key);
+  });
+}
+function updateProg(k){
+  const p=PROCS[k], done=clState(k), pct=Math.round(done.length/p.items.length*100);
+  const bar=document.getElementById('pg-'+k), lbl=document.getElementById('pct-'+k);
+  if(bar)bar.style.width=pct+'%';
+  if(lbl)lbl.textContent=done.length?`${done.length}/${p.items.length} complete · ${pct}%`:'Tap items to mark complete';
+}
+function toggleCL(k,i){
+  const ci=document.getElementById(`ci-${k}-${i}`), cb=document.getElementById(`cb-${k}-${i}`); if(!ci||!cb)return;
+  const done=clState(k), idx=done.indexOf(i);
+  if(idx>=0){done.splice(idx,1);ci.classList.remove('done');cb.textContent='';}
+  else{done.push(i);ci.classList.add('done');cb.textContent='✓';}
+  clSave(k,done); updateProg(k);
+}
+function resetCL(k){
+  const p=PROCS[k]; if(!p)return;
+  p.items.forEach((_,i)=>{const ci=document.getElementById(`ci-${k}-${i}`),cb=document.getElementById(`cb-${k}-${i}`);if(ci)ci.classList.remove('done');if(cb)cb.textContent='';});
+  clSave(k,[]); updateProg(k);
+}
+
+// ══════════ GLOSSARY ══════════
+function renderGlossary(){
+  const q=(document.getElementById('glsearch').value||'').toLowerCase();
+  const cats=['Measurement Units','Exposure Limits','Sensor Technology','Regulations & Bodies','Operational'];
+  const out=document.getElementById('glossaryOut'); let h='';
+  cats.forEach(cat=>{
+    const items=Object.keys(GLOSSARY).filter(k=>GLOSSARY[k].cat===cat).filter(k=>{
+      const g=GLOSSARY[k]; return !q||k.toLowerCase().includes(q)||g.full.toLowerCase().includes(q)||g.desc.toLowerCase().includes(q);});
+    if(!items.length)return;
+    h+=`<div class="gl-cat">${cat}</div><div class="gl-grid" style="margin-bottom:16px">`;
+    items.forEach(k=>{const g=GLOSSARY[k];
+      h+=`<div class="gl-card"><div class="gl-abbr">${k.replace('LEL50','50% LEL').replace('MGM3','mg/m³')}</div>
+        <div class="gl-full">${g.full}</div><div class="gl-desc">${g.desc}</div></div>`;});
+    h+=`</div>`;
+  });
+  out.innerHTML=h||`<div style="text-align:center;padding:30px;color:var(--dim)">No matching terms.</div>`;
+}
+
+// ══════════ NAVIGATION ══════════
+const TITLES={sensor:['Sensor Guide','· Calibration gas selection'],library:['Gas Library','· Properties & limits'],
+  converter:['Unit Converter','· LEL · ppm · flow'],regs:['Regulations','· SOLAS · ISGOTT · IMO'],
+  procedure:['Procedure','· Bump · Zero · Span · Log'],glossary:['Units & Glossary','· Full forms & terms']};
+function go(tab,btn){
+  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.sb-item').forEach(b=>b.classList.remove('on'));
+  document.getElementById('tab-'+tab)?.classList.add('on');
+  if(btn)btn.classList.add('on'); else document.querySelector(`.sb-item[data-tab="${tab}"]`)?.classList.add('on');
+  const t=TITLES[tab]||['',''];
+  document.getElementById('tbTitle').innerHTML=`${t[0]} <span>${t[1]}</span>`;
+  closeNav(); window.scrollTo({top:0,behavior:'smooth'});
+}
+function openNav(){document.getElementById('sidebar').classList.add('open');document.getElementById('scrim').classList.add('show');}
+function closeNav(){document.getElementById('sidebar').classList.remove('open');document.getElementById('scrim').classList.remove('show');}
+function swSub(grp,name,btn){
+  const par=btn.closest('.tp');
+  par.querySelectorAll('.snav .snb').forEach(b=>b.classList.remove('on')); btn.classList.add('on');
+  par.querySelectorAll('[id^="'+grp+'-"]').forEach(p=>p.style.display='none');
+  const target=document.getElementById(grp+'-'+name); if(target)target.style.display='block';
+}
+
+// ══════════ SPLASH + OFFLINE 3D (pure canvas, zero dependency) ══════════
+let splashRAF=null;
+function startSplash(){
+  const cv=document.getElementById('splashCanvas'); if(!cv)return;
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  const ctx=cv.getContext('2d'); let W,H,cx,cy;
+  function size(){const d=window.devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);cx=W/2;cy=H*0.45;}
+  size(); window.addEventListener('resize',size);
+  // build a wireframe sphere point set
+  const pts=[],R=Math.min(W,H)*0.22||150;
+  for(let la=-80;la<=80;la+=20)for(let lo=0;lo<360;lo+=18){
+    const a=la*Math.PI/180,b=lo*Math.PI/180;
+    pts.push([Math.cos(a)*Math.cos(b),Math.sin(a),Math.cos(a)*Math.sin(b)]);}
+  // orbiting "molecules"
+  const orb=[];for(let i=0;i<5;i++)orb.push({r:1.5+i*0.18,sp:0.4+i*0.15,ph:i*1.3,tilt:i*0.5});
+  let t=0;
+  function frame(){
+    t+=0.01; ctx.clearRect(0,0,W,H);
+    const rad=Math.min(W,H)*0.22||150, sy=Math.sin(t*0.5),cyr=Math.cos(t*0.5);
+    // sphere
+    pts.forEach(p=>{
+      const x=p[0]*cyr - p[2]*sy, z=p[0]*sy + p[2]*cyr, y=p[1];
+      const sc=1/(2+z), px=cx+x*rad*sc*2, py=cy+y*rad*sc*2;
+      const al=0.25+0.55*(z+1)/2, r=0.7+1.4*(z+1)/2;
+      ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fillStyle=`rgba(0,212,255,${al})`;ctx.fill();
+    });
+    // orbit rings
+    orb.forEach(o=>{
+      ctx.beginPath();
+      for(let a=0;a<=Math.PI*2+0.1;a+=0.12){
+        const ox=Math.cos(a)*rad*o.r, oz=Math.sin(a)*rad*o.r, oy=Math.sin(a+o.tilt)*rad*0.25;
+        const rx=ox*Math.cos(t*o.sp)-oz*Math.sin(t*o.sp), rz=ox*Math.sin(t*o.sp)+oz*Math.cos(t*o.sp);
+        const sc=1/(2+rz/rad), px=cx+rx*sc, py=cy+oy*sc;
+        a===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+      }
+      ctx.strokeStyle='rgba(0,212,255,0.13)';ctx.lineWidth=1;ctx.stroke();
+      // electron dot
+      const a=t*o.sp*2+o.ph, ox=Math.cos(a)*rad*o.r, oz=Math.sin(a)*rad*o.r, oy=Math.sin(a+o.tilt)*rad*0.25;
+      const rx=ox*Math.cos(t*o.sp)-oz*Math.sin(t*o.sp), rz=ox*Math.sin(t*o.sp)+oz*Math.cos(t*o.sp);
+      const sc=1/(2+rz/rad), px=cx+rx*sc, py=cy+oy*sc;
+      ctx.beginPath();ctx.arc(px,py,2.4,0,7);ctx.fillStyle='rgba(120,230,255,0.9)';ctx.fill();
+    });
+    // core glow
+    const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,rad*0.8);
+    grd.addColorStop(0,'rgba(0,212,255,0.18)');grd.addColorStop(1,'rgba(0,212,255,0)');
+    ctx.beginPath();ctx.arc(cx,cy,rad*0.8,0,7);ctx.fillStyle=grd;ctx.fill();
+    splashRAF=requestAnimationFrame(frame);
+  }
+  frame();
+}
+function enterApp(){
+  const s=document.getElementById('splash'); if(s)s.classList.add('gone');
+  if(splashRAF)cancelAnimationFrame(splashRAF);
+  lsSet('mgc_seen','1');
+}
+
+// ══════════ INIT ══════════
+document.addEventListener('DOMContentLoaded',()=>{
+  renderGasLib(); populateLELSel(); populatePPMSel(); renderLELRef(); renderPPMRef();
+  renderFlowTbl(); renderRegs(); renderProcs(); renderGlossary();
+  ['zero','span','full','log'].forEach(k=>{const el=document.getElementById('proc-'+k);if(el)el.style.display='none';});
+  // delegated info-badge / header taps
+  document.addEventListener('click',e=>{
+    const el=e.target.closest('[data-i]'); if(el){openInfo(el.getAttribute('data-i'));}
+  });
+  // splash plays on every load
+  startSplash();
+});
+</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+</body>
+</html>
